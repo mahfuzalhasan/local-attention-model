@@ -61,7 +61,7 @@ class ValPre(object):
 
 def get_train_loader(engine, dataset):
 
-    data_dir = r'../../data/nyudv2'
+    data_dir = r'./data/nyudv2'
     splits = sio.loadmat(os.path.join(data_dir,'splits.mat'))
 
     train = splits['trainNdxs']
@@ -70,9 +70,6 @@ def get_train_loader(engine, dataset):
         trainIds.append(int(train[i][0]))
     trainIds = [idx-1 for idx in trainIds]
     
-
-
-
     data_setting = {'rgb_root': config.rgb_root_folder,
                     'rgb_format': config.rgb_format,
                     'gt_root': config.gt_root_folder,

@@ -72,31 +72,118 @@ class Mlp(nn.Module):
         x = self.fc2(x)
         x = self.drop(x)
         return x
-# class multiScaleAttention(nn.Module):
-#     def __init__(self, patch_size):
-#         self.patch_size = 
-
-#     def forward(self, x):
-#         q1 =  """ On Full Image """
-#         q2 = 
-#         q3 = 
-#         ##q -> B, C, H, W : 8, 32, 120, 160
-#         ## q --> B, C, 4, H//4, 4, W//4:    8, 32, 4, 30, 4, 40 
-#         ## q --> B, C, H//4, W//4, 4, 4:    8, 32, 30, 40, 4, 4
-#         ## q --> B, C, H//4 * W//4, 4, 4:   8, 32, 1200, 4, 4
-
-#         ## q: B, C*H//4*W//4, 4 * 4:           8, 32*1200, 4, 4
-#         ## q: B, NC, 16:                8, 32*1200, 16
 
 
-#         ## k --> B, C, H//4 * W//4, 4, 4:   8, 32, 1200, 4, 4
-#         ## k: B, C*H//4*W//4, 4*:           8, 32*1200, 4, 4
-#         ## k: B, NC, 16:                8, 32*1200, 16
+class MultiScaleAttention(nn.Module):
+    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0., sr_ratio=1, local_region_shape = 8):
+        super().__init__()
+        assert dim % num_heads == 0, f"dim {dim} should be divided by num_heads {num_heads}."
 
-#         ## attn -> q * k.T ---> 8, 32, 1200, 32, 1200
+        self.dim = dim
+        self.num_heads = num_heads
+        head_dim = dim // num_heads
+        self.scale = qk_scale or head_dim ** -0.5
+        self.local_region_shape = local_region_shape
+        # Linear embedding
+        self.q = nn.Linear(dim, dim, bias=qkv_bias)
+        self.kv = nn.Linear(dim, dim * 2, bias=qkv_bias)
+        self.attn_drop = nn.Dropout(attn_drop)
+        self.proj = nn.Linear(dim, dim)
+        self.proj_drop = nn.Dropout(proj_drop)
 
-#         ## 
-#         ##v -> B, C, H, W : 8, 32, 120, 160
+        self.sr_ratio = sr_ratio
+        if sr_ratio > 1:
+            self.sr = nn.Conv2d(dim, dim, kernel_size=sr_ratio, stride=sr_ratio)
+            self.norm = nn.LayerNorm(dim)
+
+        self.apply(self._init_weights)
+
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            trunc_normal_(m.weight, std=.02)
+            if isinstance(m, nn.Linear) and m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.constant_(m.bias, 0)
+            nn.init.constant_(m.weight, 1.0)
+        elif isinstance(m, nn.Conv2d):
+            fan_out = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+            fan_out //= m.groups
+            m.weight.data.normal_(0, math.sqrt(2.0 / fan_out))
+            if m.bias is not None:
+                m.bias.data.zero_()
+
+    """ arr.shape -> B x num_head x H x W x C """
+    def patchify(self, arr, patch_size):
+        patches = arr.view(arr.shape[0], arr.shape[1], arr.shape[2] // patch_size, patch_size, arr.shape[3] // patch_size, patch_size, arr.shape[4])
+        #B x num_head x H//ps x ps x W//ps x ps x C
+        # print('patches shape: ', patches.shape)
+        patches = patches.permute(0, 1, 6, 2, 4, 3, 5).contiguous()
+        # B x num_head x C x H//ps x W//ps x ps x ps
+        # print('patches shape after permute: ', patches.shape)
+        patches = patches.view(arr.shape[0], arr.shape[1], -1, patch_size, patch_size)
+        # print('patches reshape: ', patches.shape)
+        return patches
+
+    def forward(self, x, H, W):
+        print('!!!!!!!!!!!!attention head: ',self.num_heads, ' !!!!!!!!!!')
+        B, N, C = x.shape
+        q = self.q(x).reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3) 
+        
+        print(f'reshape final q:{q.shape}')
+        if self.local_region_shape > 1:
+            print('dividing query q')
+            q = q.view(q.shape[0], q.shape[1], H, W, q.shape[3])
+            print('q after expanding: ',q.shape)
+            q_patch = self.patchify(q, self.local_region_shape)
+            print('q_patch: ',q_patch.shape)
+            q = q_patch
+
+
+        if self.sr_ratio > 1:
+            x_ = x.permute(0, 2, 1).reshape(B, C, H, W) 
+            x_ = self.sr(x_).reshape(B, C, -1).permute(0, 2, 1) 
+            x_ = self.norm(x_)
+            kv = self.kv(x_).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4) 
+        else:
+            kv = self.kv(x).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4) 
+        k, v = kv[0], kv[1]
+        
+        print(f'k:{k.shape}')
+        print(f'v:{v.shape}')
+        if self.local_region_shape > 1:
+            print('dividing key k')
+            k = k.view(k.shape[0], k.shape[1], H, W, k.shape[3])
+            print('k after expanding: ',k.shape)
+            k_patch = self.patchify(k, self.local_region_shape)
+            print('k_patch: ',k_patch.shape)
+            k = k_patch
+
+            print('dividing value v')
+            v = v.view(v.shape[0], v.shape[1], H, W, v.shape[3])
+            print('v after expanding: ',v.shape)
+            v_patch = self.patchify(v, self.local_region_shape)
+            print('v_patch: ',v_patch.shape)
+            v = v_patch
+
+        attn = (q @ k.transpose(-2, -1)) * self.scale 
+        print('attn: ', attn.shape)   
+        attn = attn.softmax(dim=4)      #couldn't figure out yet
+        attn = self.attn_drop(attn)
+        # attn = attn.view(attn.shape[0], attn.shape[1], -1, attn.shape[4])
+        # print('attn after reshape: ',attn.shape) 
+        x = (attn @ v.transpose(-2,-1))
+        print('attn*v: ',x.shape)
+        x = x.view(x.shape[0], x.shape[1], -1, x.shape[4])
+        print('view x: ',x.shape)
+        x = x.transpose(1, 2)
+        print('transpose x: ',x.shape)
+        x = x.reshape(B, N, C)
+        print('reshape x: ',x.shape)
+        x = self.proj(x)
+        x = self.proj_drop(x)
+        print('final x: ',x.shape)
+        return x
        
 class Attention(nn.Module):
     def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0., sr_ratio=1):
@@ -107,7 +194,6 @@ class Attention(nn.Module):
         self.num_heads = num_heads
         head_dim = dim // num_heads
         self.scale = qk_scale or head_dim ** -0.5
-
         # Linear embedding
         self.q = nn.Linear(dim, dim, bias=qkv_bias)
         self.kv = nn.Linear(dim, dim * 2, bias=qkv_bias)
@@ -138,24 +224,10 @@ class Attention(nn.Module):
                 m.bias.data.zero_()
 
     def forward(self, x, H, W):
+        print('!!!!!!!!!!!!attention head: ',self.num_heads, ' !!!!!!!!!!')
         B, N, C = x.shape
-        # B N C -> B N num_head C//num_head -> B C//num_head N num_heads
-        print(f'x:{x.shape}')
-
-        self.num_head
+        print()
         q = self.q(x).reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3) 
-        ####
-        # q ---> patchify these
-        # then calculate attention on patchified k and v
-        # x --> 120, 160, 32 -->   B, 32*192, 10, 10 --> B, H, NC//H, 10, 10 
-        # Q -> B, H, NC//H, 10, 10 --> 
-        # K --> same
-        # attn --> B, H, NC//H,
-
-        # att_2, attn_3, attn_5
-        ###
-        print('layer q: ',self.q)
-        print('self.q(x) size: ',self.q(x).size())
         print(f'reshape final q:{q.shape}')
         if self.sr_ratio > 1:
             x_ = x.permute(0, 2, 1).reshape(B, C, H, W) 
@@ -168,26 +240,16 @@ class Attention(nn.Module):
         
         print(f'k:{k.shape}')
         print(f'v:{v.shape}')
-        # q --> B, num_head, H, W, C//num_head
-        # attn --> B, H, N, N
-        attn = (q @ k.transpose(-2, -1)) * self.scale
-        
-        print('attn: ',attn.shape)
-        
+        attn = (q @ k.transpose(-2, -1)) * self.scale   
+        print('attention: ',attn.shape) 
         attn = attn.softmax(dim=-1)
-        
         attn = self.attn_drop(attn)
-
+        print('attn after reshape: ',attn.shape)
         x = (attn @ v)
         print('attn*v: ',x.shape)
         x = x.transpose(1, 2).reshape(B, N, C)
-        print('x reshape: ',x.shape)
-
-        
         x = self.proj(x)
-        print('proj: ',x.shape)
         x = self.proj_drop(x)
-
         return x
 
 
@@ -241,13 +303,13 @@ class OverlapPatchEmbed(nn.Module):
         super().__init__()
         img_size = to_2tuple(img_size)
         patch_size = to_2tuple(patch_size)
-        #print('patch size: ',patch_size)
+        ##print('patch size: ',patch_size)
 
         self.img_size = img_size
         self.patch_size = patch_size
         self.H, self.W = img_size[0] // patch_size[0], img_size[1] // patch_size[1]
         self.num_patches = self.H * self.W
-        #print('num_patches: ',self.num_patches)
+        ##print('num_patches: ',self.num_patches)
         self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=stride,
                               padding=(patch_size[0] // 2, patch_size[1] // 2))
         self.norm = nn.LayerNorm(embed_dim)
@@ -271,16 +333,20 @@ class OverlapPatchEmbed(nn.Module):
 
     def forward(self, x):
         # B C H W
-        #print('forward --> overlap patch embedding')
-        #print('input x: ',x.shape)
+        ##print('forward --> overlap patch embedding')
+        print('input x: ',x.shape)
+        print('proj layer: ',self.proj)
         x = self.proj(x)
+        
         _, _, H, W = x.shape
-        print(f'after projection H:{H} W:{W}')
+        print(f'x after proj:{x.shape}')
+        #print(f'after projection H:{H} W:{W}')
         x = x.flatten(2).transpose(1, 2)
-        #print(f'x flatten:{x.shape}')
+        ##print(f'x flatten:{x.shape}')
         # B H*W/16 C
         x = self.norm(x)
-        #print(f'final x:{x.shape}')
+        print(f'x final:{x.shape}')
+        ##print(f'final x:{x.shape}')
 
         return x, H, W
 
@@ -419,81 +485,119 @@ class RGBXTransformer(nn.Module):
         """
         x_rgb: B x N x H x W
         """
-        print("initial x_rgb: ",x_rgb.size())
+        #print("initial x_rgb: ",x_rgb.size())
+        print(f'input:::rgb:{x_rgb.shape} ir:{x_e.shape}')
         B = x_rgb.shape[0]
         outs = []
         outs_fused = []
 
         # stage 1
+        print("####################Stage 1############################")
+        print('patch embedding 1')
         x_rgb, H, W = self.patch_embed1(x_rgb)
         # B H*W/16 C
-        print("s1 x_rgb: ",x_rgb.size())
+        #print("s1 x_rgb: ",x_rgb.size())
+        print('IR patch embedding 1')
         x_e, _, _ = self.extra_patch_embed1(x_e)
+        print("$$$$$RGB patch Process$$$$$$")
         for i, blk in enumerate(self.block1):
+            print(f'Block: {i}')
             x_rgb = blk(x_rgb, H, W)
+        print("$$$$$IR patch Process$$$$$$")
         for i, blk in enumerate(self.extra_block1):
             x_e = blk(x_e, H, W)
         x_rgb = self.norm1(x_rgb)
         x_e = self.extra_norm1(x_e)
+        print(f'****** output after attention blocks:{x_rgb.shape}********')
 
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         x_e = x_e.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
+        print(f'output rgb:{x_rgb.shape} ir:{x_e.shape}')
         x_rgb, x_e = self.FRMs[0](x_rgb, x_e)
+        print(f'output after FRM rgb:{x_rgb.shape} ir:{x_e.shape}')
         x_fused = self.FFMs[0](x_rgb, x_e)
+        print(f'final output:{x_fused.shape}')
         outs.append(x_fused)
         
 
         # stage 2
+        print("####################Stage 2############################")
+        print('patch embedding 2')
         x_rgb, H, W = self.patch_embed2(x_rgb)
-        print("s2 x_rgb: ",x_rgb.size())
+        #print("s2 x_rgb: ",x_rgb.size())
+        print('IR patch embedding 2')
         x_e, _, _ = self.extra_patch_embed2(x_e)
+        print("$$$$$RGB patch Process$$$$$$")
         for i, blk in enumerate(self.block2):
             x_rgb = blk(x_rgb, H, W)
+        print("$$$$$IR patch Process$$$$$$")
         for i, blk in enumerate(self.extra_block2):
             x_e = blk(x_e, H, W)
         x_rgb = self.norm2(x_rgb)
         x_e = self.extra_norm2(x_e)
+        print(f'****** output after attention blocks:{x_rgb.shape}********')
 
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         x_e = x_e.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
+        print(f'output rgb:{x_rgb.shape} ir:{x_e.shape}')
         x_rgb, x_e = self.FRMs[1](x_rgb, x_e)
+        print(f'output after FRM rgb:{x_rgb.shape} ir:{x_e.shape}')
         x_fused = self.FFMs[1](x_rgb, x_e)
+        print(f'final output:{x_fused.shape}')
         outs.append(x_fused)
         
 
         # stage 3
+        print("####################Stage 3############################")
+        print('patch embedding 3')
         x_rgb, H, W = self.patch_embed3(x_rgb)
-        print("s3 x_rgb: ",x_rgb.size())
+        #print("s3 x_rgb: ",x_rgb.size())
+        print('IR patch embedding 3')
         x_e, _, _ = self.extra_patch_embed3(x_e)
+        print("$$$$$RGB patch Process$$$$$$")
         for i, blk in enumerate(self.block3):
             x_rgb = blk(x_rgb, H, W)
+        print("$$$$$IR patch Process$$$$$$")
         for i, blk in enumerate(self.extra_block3):
             x_e = blk(x_e, H, W)
         x_rgb = self.norm3(x_rgb)
         x_e = self.extra_norm3(x_e)
+        print(f'****** output after attention blocks:{x_rgb.shape}********')
 
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         x_e = x_e.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
+        print(f'output rgb:{x_rgb.shape} ir:{x_e.shape}')
         x_rgb, x_e = self.FRMs[2](x_rgb, x_e)
+        print(f'output after FRM rgb:{x_rgb.shape} ir:{x_e.shape}')
         x_fused = self.FFMs[2](x_rgb, x_e)
+        print(f'final output:{x_fused.shape}')
         outs.append(x_fused)
         
 
         # stage 4
+        print("####################Stage 4############################")
+        print('patch embedding 4')
         x_rgb, H, W = self.patch_embed4(x_rgb)
-        print("s4 x_rgb: ",x_rgb.size())
+        #print("s4 x_rgb: ",x_rgb.size())
+        print('IR patch embedding  4')
         x_e, _, _ = self.extra_patch_embed4(x_e)
+        print("$$$$$RGB patch Process$$$$$$")
         for i, blk in enumerate(self.block4):
             x_rgb = blk(x_rgb, H, W)
+        print("$$$$$IR patch Process$$$$$$")
         for i, blk in enumerate(self.extra_block4):
             x_e = blk(x_e, H, W)
         x_rgb = self.norm4(x_rgb)
         x_e = self.extra_norm4(x_e)
+        print(f'****** output after attention blocks:{x_rgb.shape}********')
 
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         x_e = x_e.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
+        print(f'output rgb:{x_rgb.shape} ir:{x_e.shape}')
         x_rgb, x_e = self.FRMs[3](x_rgb, x_e)
+        print(f'output after FRM rgb:{x_rgb.shape} ir:{x_e.shape}')
         x_fused = self.FFMs[3](x_rgb, x_e)
+        print(f'final output:{x_fused.shape}')
         outs.append(x_fused)
         
         return outs
@@ -587,13 +691,20 @@ class mit_b5(RGBXTransformer):
 
 if __name__=="__main__":
     backbone = mit_b0(norm_layer = nn.BatchNorm2d)
+    
+    # print(backbone)
     B = 2
     C = 3
     H = 480
     W = 640
-    rgb = torch.randn(B, C, H, W)
-    x = torch.randn(B, C, H, W)
-    output = backbone(rgb, x)
-    print(output.size())
+    ms_attention = MultiScaleAttention(32, num_heads=4)
+    f = torch.randn(B, 19200, 32)
+    print(f'input to multiScaleAttention:{f.shape}')
+    y = ms_attention(f, 120, 160)
+    print('attn output: ',y.shape)
+    # rgb = torch.randn(B, C, H, W)
+    # x = torch.randn(B, C, H, W)
+    # output = backbone(rgb, x)
+    # print(output.size())
 
 

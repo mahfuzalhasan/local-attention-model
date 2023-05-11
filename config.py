@@ -19,7 +19,7 @@ C.abs_dir = osp.realpath(".")
 # Dataset config
 """Dataset Path"""
 C.dataset_name = 'NYUDepthv2'
-C.dataset_path = r'../../data/NYUDepthv2'
+C.dataset_path = r'./data/NYUDepthv2'
 C.rgb_root_folder = osp.join(C.dataset_path, 'RGB')
 C.rgb_format = '.jpg'
 C.gt_root_folder = osp.join(C.dataset_path, 'Label')
@@ -52,8 +52,8 @@ C.norm_std = np.array([0.229, 0.224, 0.225])
 C.backbone = 'mit_b2' # Remember change the path below.
 #C.pretrained_model = C.root_dir + '/pretrained/segformer/mit_b2.pth'
 #C.pretrained_model = "../../Results/saved_models/NYUDV2_CMX+Segformer-B2.pth"
-C.pretrained_model = "../../Results/saved_models/segformer/mit_b2.pth"
-#C.pretrained_model = None
+# C.pretrained_model = "./Results/saved_models/segformer/mit_b2.pth"
+C.pretrained_model = None
 C.decoder = 'MLPDecoder'
 C.decoder_embed_dim = 512
 C.optimizer = 'AdamW'
