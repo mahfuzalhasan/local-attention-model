@@ -15,7 +15,7 @@
 # To check MultiScale Attention
 - go to: ./models/encoders.<br/>
 - run python3 dual_segformer.py. It will run multiscale attention only (check **main** section). If you want to compare the output with Attention, call Attention too.<br/>
-- to check how an input is modified by the whole Dual_Segformer Network, pass the input through that. You just need to change in the **main** section<br/>
+- to check how an input is modified by the whole Dual_Segformer Network, pass the input through that. You just need to change in the **main** section of *dual_segformer.py*<br/>
 
 ## Acknowledgement
 
