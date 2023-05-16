@@ -132,9 +132,9 @@ class MultiScaleAttention(nn.Module):
         
         print(f'reshape final q:{q.shape}')
         if self.local_region_shape > 1:
-            print('dividing query q')
+            # print('dividing query q')
             q = q.view(q.shape[0], q.shape[1], H, W, q.shape[3])
-            print('q after expanding: ',q.shape)
+            # print('q after expanding: ',q.shape)
             q_patch = self.patchify(q, self.local_region_shape)
             print('q_patch: ',q_patch.shape)
             q = q_patch
@@ -152,23 +152,23 @@ class MultiScaleAttention(nn.Module):
         print(f'k:{k.shape}')
         print(f'v:{v.shape}')
         if self.local_region_shape > 1:
-            print('dividing key k')
+            # print('dividing key k')
             k = k.view(k.shape[0], k.shape[1], H, W, k.shape[3])
-            print('k after expanding: ',k.shape)
+            # print('k after expanding: ',k.shape)
             k_patch = self.patchify(k, self.local_region_shape)
             print('k_patch: ',k_patch.shape)
             k = k_patch
 
-            print('dividing value v')
+            # print('dividing value v')
             v = v.view(v.shape[0], v.shape[1], H, W, v.shape[3])
-            print('v after expanding: ',v.shape)
+            # print('v after expanding: ',v.shape)
             v_patch = self.patchify(v, self.local_region_shape)
             print('v_patch: ',v_patch.shape)
             v = v_patch
 
-        attn = (q @ k.transpose(-2, -1)) * self.scale 
+        attn = (q @ k.transpose(-2, -1)) * self.scale   # scaling needs to be fixed
         print('attn: ', attn.shape)   
-        attn = attn.softmax(dim=4)      #couldn't figure out yet
+        attn = attn.softmax(dim=4)      #  couldn't figure out yet
         attn = self.attn_drop(attn)
         # attn = attn.view(attn.shape[0], attn.shape[1], -1, attn.shape[4])
         # print('attn after reshape: ',attn.shape) 
