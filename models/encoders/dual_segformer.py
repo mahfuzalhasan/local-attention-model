@@ -73,9 +73,9 @@ class Mlp(nn.Module):
         x = self.drop(x)
         return x
 
-
+## local_region_shape = 1 --> Full Scale Attention
 class MultiScaleAttention(nn.Module):
-    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0., sr_ratio=1, local_region_shape = [8, 16, 32]):
+    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0., sr_ratio=1, local_region_shape = [4, 8, 40]):
         super().__init__()
         assert dim % num_heads == 0, f"dim {dim} should be divided by num_heads {num_heads}."
 
@@ -114,7 +114,8 @@ class MultiScaleAttention(nn.Module):
                 m.bias.data.zero_()
 
     """ arr.shape -> B x num_head x H x W x C """
-    def patchify(self, arr, patch_size):
+    def patchify(self, arr, H, W, patch_size):
+        arr = arr.view(arr.shape[0], arr.shape[1], H, W, arr.shape[3])
         patches = arr.view(arr.shape[0], arr.shape[1], arr.shape[2] // patch_size, patch_size, arr.shape[3] // patch_size, patch_size, arr.shape[4])
         #B x num_head x H//ps x ps x W//ps x ps x C
         # print('patches shape: ', patches.shape)
@@ -125,21 +126,23 @@ class MultiScaleAttention(nn.Module):
         # print('patches reshape: ', patches.shape)
         return patches
 
+    def attention(self, q, k, v):
+        attn = (q @ k.transpose(-2, -1)) * self.scale   # scaling needs to be fixed
+        # print('attn: ', attn.shape)   
+        attn = attn.softmax(dim=-1)      #  couldn't figure out yet
+        attn = self.attn_drop(attn)
+        # attn = attn.view(attn.shape[0], attn.shape[1], -1, attn.shape[4])
+        # print('attn after reshape: ',attn.shape) 
+        x = (attn @ v)
+        return x
+
+
     def forward(self, x, H, W):
         print('!!!!!!!!!!!!attention head: ',self.num_heads, ' !!!!!!!!!!')
+        A = []
         B, N, C = x.shape
         q = self.q(x).reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3) 
-        
         print(f'reshape final q:{q.shape}')
-        if self.local_region_shape > 1:
-            # print('dividing query q')
-            q = q.view(q.shape[0], q.shape[1], H, W, q.shape[3])
-            # print('q after expanding: ',q.shape)
-            q_patch = self.patchify(q, self.local_region_shape)
-            print('q_patch: ',q_patch.shape)
-            q = q_patch
-
-
         if self.sr_ratio > 1:
             x_ = x.permute(0, 2, 1).reshape(B, C, H, W) 
             x_ = self.sr(x_).reshape(B, C, -1).permute(0, 2, 1) 
@@ -148,42 +151,32 @@ class MultiScaleAttention(nn.Module):
         else:
             kv = self.kv(x).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4) 
         k, v = kv[0], kv[1]
+
+        a_1 = self.attention(q, k, v)
+        a_1 = a_1.transpose(1, 2)
+        a_1 = a_1.reshape(B, N, C)
+        a_1 = self.proj(a_1)
+        a_1 = self.proj_drop(a_1)
+
+        A.append(a_1)
+
+        for rg_shp in self.local_region_shape:
+            q_patch = self.patchify(q, H, W, rg_shp)
+            k_patch = self.patchify(k, H, W, rg_shp)
+            v_patch = self.patchify(v, H, W, rg_shp)
+            patched_attn = self.attention(q_patch, k_patch, v_patch)
+            print(patched_attn.shape)
+            a_1 = patched_attn.view(patched_attn.shape[0], patched_attn.shape[1], -1, patched_attn.shape[4])
+            a_1 = a_1.transpose(1, 2)
+            a_1 = a_1.reshape(B, N, C)
+            a_1 = self.proj(a_1)
+            a_1 = self.proj_drop(a_1)
+            A.append(a_1)
+
+        for attn_o in A:
+            print(attn_o.shape)
         
-        print(f'k:{k.shape}')
-        print(f'v:{v.shape}')
-        if self.local_region_shape > 1:
-            # print('dividing key k')
-            k = k.view(k.shape[0], k.shape[1], H, W, k.shape[3])
-            # print('k after expanding: ',k.shape)
-            k_patch = self.patchify(k, self.local_region_shape)
-            print('k_patch: ',k_patch.shape)
-            k = k_patch
-
-            # print('dividing value v')
-            v = v.view(v.shape[0], v.shape[1], H, W, v.shape[3])
-            # print('v after expanding: ',v.shape)
-            v_patch = self.patchify(v, self.local_region_shape)
-            print('v_patch: ',v_patch.shape)
-            v = v_patch
-
-        attn = (q @ k.transpose(-2, -1)) * self.scale   # scaling needs to be fixed
-        print('attn: ', attn.shape)   
-        attn = attn.softmax(dim=4)      #  couldn't figure out yet
-        attn = self.attn_drop(attn)
-        # attn = attn.view(attn.shape[0], attn.shape[1], -1, attn.shape[4])
-        # print('attn after reshape: ',attn.shape) 
-        x = (attn @ v.transpose(-2,-1))
-        print('attn*v: ',x.shape)
-        x = x.view(x.shape[0], x.shape[1], -1, x.shape[4])
-        print('view x: ',x.shape)
-        x = x.transpose(1, 2)
-        print('transpose x: ',x.shape)
-        x = x.reshape(B, N, C)
-        print('reshape x: ',x.shape)
-        x = self.proj(x)
-        x = self.proj_drop(x)
-        print('final x: ',x.shape)
-        return x
+        return A
        
 class Attention(nn.Module):
     def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0., sr_ratio=1):
@@ -697,14 +690,14 @@ if __name__=="__main__":
     C = 3
     H = 480
     W = 640
-    # ms_attention = MultiScaleAttention(32, num_heads=4)
-    # f = torch.randn(B, 19200, 32)
-    # print(f'input to multiScaleAttention:{f.shape}')
-    # y = ms_attention(f, 120, 160)
+    ms_attention = MultiScaleAttention(32, num_heads=4)
+    f = torch.randn(B, 19200, 32)
+    print(f'input to multiScaleAttention:{f.shape}')
+    y = ms_attention(f, 120, 160)
     # print('attn output: ',y.shape)
-    rgb = torch.randn(B, C, H, W)
-    x = torch.randn(B, C, H, W)
-    output = backbone(rgb, x)
+    # rgb = torch.randn(B, C, H, W)
+    # x = torch.randn(B, C, H, W)
+    # output = backbone(rgb, x)
     # print(output.size())
 
 
