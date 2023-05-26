@@ -75,7 +75,7 @@ class Mlp(nn.Module):
 
 
 class MultiScaleAttention(nn.Module):
-    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0., sr_ratio=1, local_region_shape = 8):
+    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0., sr_ratio=1, local_region_shape = [8, 16, 32]):
         super().__init__()
         assert dim % num_heads == 0, f"dim {dim} should be divided by num_heads {num_heads}."
 
@@ -697,14 +697,14 @@ if __name__=="__main__":
     C = 3
     H = 480
     W = 640
-    ms_attention = MultiScaleAttention(32, num_heads=4)
-    f = torch.randn(B, 19200, 32)
-    print(f'input to multiScaleAttention:{f.shape}')
-    y = ms_attention(f, 120, 160)
-    print('attn output: ',y.shape)
-    # rgb = torch.randn(B, C, H, W)
-    # x = torch.randn(B, C, H, W)
-    # output = backbone(rgb, x)
+    # ms_attention = MultiScaleAttention(32, num_heads=4)
+    # f = torch.randn(B, 19200, 32)
+    # print(f'input to multiScaleAttention:{f.shape}')
+    # y = ms_attention(f, 120, 160)
+    # print('attn output: ',y.shape)
+    rgb = torch.randn(B, C, H, W)
+    x = torch.randn(B, C, H, W)
+    output = backbone(rgb, x)
     # print(output.size())
 
 

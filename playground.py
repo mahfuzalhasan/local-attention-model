@@ -193,7 +193,15 @@ if __name__=="__main__":
     print('mul Soft')
     print(mul)
     # attn = self.attn_drop(attn)
+    mul_s = mul.view(1, 3, 3, 2, 2)
+    mul_s = mul_s.permute(0, 1, 3, 2, 4)
+    print('mul_s: ',mul_s.shape)
+    mul_r = mul_s.reshape(mul.shape[0], H, W)
+    print('mul reshape')
+    print(mul_r, mul_r.shape)
     print("####################################")
+    
+    summation = torch.sum(mul_r)
 
 
 
