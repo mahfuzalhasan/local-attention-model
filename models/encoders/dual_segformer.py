@@ -98,7 +98,7 @@ class MultiScaleAttention(nn.Module):
             self.norm = nn.LayerNorm(dim)
 
         # self.attn_fusion = iAFF(dim)
-        self.final_proj = nn.Linear(4*dim, dim)
+        self.final_proj = nn.Linear(dim * (len(self.local_region_shape)+1), dim)
         self.apply(self._init_weights)
 
     def _init_weights(self, m):
@@ -121,35 +121,35 @@ class MultiScaleAttention(nn.Module):
         arr = arr.view(arr.shape[0], arr.shape[1], H, W, arr.shape[3])
         patches = arr.view(arr.shape[0], arr.shape[1], arr.shape[2] // patch_size, patch_size, arr.shape[3] // patch_size, patch_size, arr.shape[4])
         #B x num_head x H//ps x ps x W//ps x ps x C
-        # print('patches shape: ', patches.shape)
+        # #print('patches shape: ', patches.shape)
         patches = patches.permute(0, 1, 6, 2, 4, 3, 5).contiguous()
         # B x num_head x C x H//ps x W//ps x ps x ps
-        # print('patches shape after permute: ', patches.shape)
+        # #print('patches shape after permute: ', patches.shape)
         patches = patches.view(arr.shape[0], arr.shape[1], -1, patch_size, patch_size)
-        # print('patches reshape: ', patches.shape)
+        # #print('patches reshape: ', patches.shape)
         return patches
 
     def attention(self, q, k, v):
-        print(self.scale)
-        # print('q: ',q.size())
-        # print('k: ',k.size())
-        # print('v: ',v.size())
+        ##print(self.scale)
+        # #print('q: ',q.size())
+        # #print('k: ',k.size())
+        # #print('v: ',v.size())
         attn = (q @ k.transpose(-2, -1)) * self.scale   # scaling needs to be fixed
-        # print('attn: ', attn.shape)   
+        # #print('attn: ', attn.shape)   
         attn = attn.softmax(dim=-1)      #  couldn't figure out yet
         attn = self.attn_drop(attn)
         # attn = attn.view(attn.shape[0], attn.shape[1], -1, attn.shape[4])
-        # print('attn after reshape: ',attn.shape) 
+        # #print('attn after reshape: ',attn.shape) 
         x = (attn @ v)
         return x
 
 
     def forward(self, x, H, W):
-        print('!!!!!!!!!!!!attention head: ',self.num_heads, ' !!!!!!!!!!')
+        ##print('!!!!!!!!!!!!attention head: ',self.num_heads, ' !!!!!!!!!!')
         A = []
         B, N, C = x.shape
         q = self.q(x).reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3) 
-        # print(f'reshape final q:{q.shape}')
+        # #print(f'reshape final q:{q.shape}')
 
         # This reduces dimension of k and v
         # 120, 160 --Flatten--> 19200--FNN--> 300
@@ -177,7 +177,7 @@ class MultiScaleAttention(nn.Module):
             k_patch = self.patchify(k, H, W, rg_shp)
             v_patch = self.patchify(v, H, W, rg_shp)
             patched_attn = self.attention(q_patch, k_patch, v_patch)
-            # print(patched_attn.shape)
+            # #print(patched_attn.shape)
             a_1 = patched_attn.view(patched_attn.shape[0], patched_attn.shape[1], -1, patched_attn.shape[4])
             a_1 = a_1.transpose(1, 2)
             a_1 = a_1.reshape(B, N, C)
@@ -185,12 +185,13 @@ class MultiScaleAttention(nn.Module):
             a_1 = self.proj_drop(a_1)
             A.append(a_1)
 
-        for attn_o in A:
-            print(attn_o.shape)
+        # #print('$$$$multi attention shapes$$$$')
+        # for attn_o in A:
+        #     #print(attn_o.shape)
         A = torch.cat(A, dim=2)
         A = self.final_proj(A)
         # A = 
-        print("A: ",A.size())
+        # #print("A: ",A.size())
         
 
         return A
@@ -234,11 +235,11 @@ class Attention(nn.Module):
                 m.bias.data.zero_()
 
     def forward(self, x, H, W):
-        print('!!!!!!!!!!!!attention head: ',self.num_heads, ' !!!!!!!!!!')
+        # #print('!!!!!!!!!!!!attention head: ',self.num_heads, ' !!!!!!!!!!')
         B, N, C = x.shape
-        print()
+        # #print()
         q = self.q(x).reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3) 
-        print(f'reshape final q:{q.shape}')
+        # #print(f'reshape final q:{q.shape}')
         if self.sr_ratio > 1:
             x_ = x.permute(0, 2, 1).reshape(B, C, H, W) 
             x_ = self.sr(x_).reshape(B, C, -1).permute(0, 2, 1) 
@@ -248,33 +249,35 @@ class Attention(nn.Module):
             kv = self.kv(x).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4) 
         k, v = kv[0], kv[1]
         
-        print(f'k:{k.shape}')
-        print(f'v:{v.shape}')
+        # #print(f'k:{k.shape}')
+        # #print(f'v:{v.shape}')
         attn = (q @ k.transpose(-2, -1)) * self.scale   
-        print('attention: ',attn.shape) 
+        # #print('attention: ',attn.shape) 
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
-        print('attn after reshape: ',attn.shape)
+        # #print('attn after reshape: ',attn.shape)
         x = (attn @ v)
-        print('attn*v: ',x.shape)
+        # #print('attn*v: ',x.shape)
         x = x.transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
 
-
+# Adding extra variable to class initialization.
+# local_region_shape:list --> to patchify query and key
 class Block(nn.Module):
     """
     Transformer Block: Self-Attention -> Mix FFN -> OverLap Patch Merging
     """
     def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
-                 drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm, sr_ratio=1):
+                 drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm, sr_ratio=1, local_region_shape=[5, 10, 20, 40]):
         super().__init__()
         self.norm1 = norm_layer(dim)
-        self.attn = Attention(
+        self.local_region_shape = local_region_shape
+        self.attn = MultiScaleAttention(
             dim,
             num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale,
-            attn_drop=attn_drop, proj_drop=drop, sr_ratio=sr_ratio)
+            attn_drop=attn_drop, proj_drop=drop, sr_ratio=sr_ratio, local_region_shape=self.local_region_shape)
         # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.norm2 = norm_layer(dim)
@@ -313,13 +316,13 @@ class OverlapPatchEmbed(nn.Module):
         super().__init__()
         img_size = to_2tuple(img_size)
         patch_size = to_2tuple(patch_size)
-        ##print('patch size: ',patch_size)
+        ###print('patch size: ',patch_size)
 
         self.img_size = img_size
         self.patch_size = patch_size
         self.H, self.W = img_size[0] // patch_size[0], img_size[1] // patch_size[1]
         self.num_patches = self.H * self.W
-        ##print('num_patches: ',self.num_patches)
+        ###print('num_patches: ',self.num_patches)
         self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=stride,
                               padding=(patch_size[0] // 2, patch_size[1] // 2))
         self.norm = nn.LayerNorm(embed_dim)
@@ -343,20 +346,20 @@ class OverlapPatchEmbed(nn.Module):
 
     def forward(self, x):
         # B C H W
-        ##print('forward --> overlap patch embedding')
-        print('input x: ',x.shape)
-        print('proj layer: ',self.proj)
+        ###print('forward --> overlap patch embedding')
+        ##print('input x: ',x.shape)
+        ##print('proj layer: ',self.proj)
         x = self.proj(x)
         
         _, _, H, W = x.shape
-        print(f'x after proj:{x.shape}')
-        #print(f'after projection H:{H} W:{W}')
+        ##print(f'x after proj:{x.shape}')
+        ##print(f'after projection H:{H} W:{W}')
         x = x.flatten(2).transpose(1, 2)
-        ##print(f'x flatten:{x.shape}')
+        ###print(f'x flatten:{x.shape}')
         # B H*W/16 C
         x = self.norm(x)
-        print(f'x final:{x.shape}')
-        ##print(f'final x:{x.shape}')
+        # #print(f'x final:{x.shape}, H:{H} W:{W}')
+        ###print(f'final x:{x.shape}')
 
         return x, H, W
 
@@ -396,14 +399,14 @@ class RGBXTransformer(nn.Module):
         self.block1 = nn.ModuleList([Block(
             dim=embed_dims[0], num_heads=num_heads[0], mlp_ratio=mlp_ratios[0], qkv_bias=qkv_bias, qk_scale=qk_scale,
             drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
-            sr_ratio=sr_ratios[0])
+            sr_ratio=sr_ratios[0], local_region_shape=[5, 10, 20, 40])
             for i in range(depths[0])])
         self.norm1 = norm_layer(embed_dims[0])
 
         self.extra_block1 = nn.ModuleList([Block(
             dim=embed_dims[0], num_heads=num_heads[0], mlp_ratio=mlp_ratios[0], qkv_bias=qkv_bias, qk_scale=qk_scale,
             drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
-            sr_ratio=sr_ratios[0])
+            sr_ratio=sr_ratios[0], local_region_shape=[5, 10, 20, 40])
             for i in range(depths[0])])
         self.extra_norm1 = norm_layer(embed_dims[0])
         cur += depths[0]
@@ -411,14 +414,14 @@ class RGBXTransformer(nn.Module):
         self.block2 = nn.ModuleList([Block(
             dim=embed_dims[1], num_heads=num_heads[1], mlp_ratio=mlp_ratios[1], qkv_bias=qkv_bias, qk_scale=qk_scale,
             drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur], norm_layer=norm_layer,
-            sr_ratio=sr_ratios[1])
+            sr_ratio=sr_ratios[1], local_region_shape=[5, 10, 20])
             for i in range(depths[1])])
         self.norm2 = norm_layer(embed_dims[1])
 
         self.extra_block2 = nn.ModuleList([Block(
             dim=embed_dims[1], num_heads=num_heads[1], mlp_ratio=mlp_ratios[1], qkv_bias=qkv_bias, qk_scale=qk_scale,
             drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur+1], norm_layer=norm_layer,
-            sr_ratio=sr_ratios[1])
+            sr_ratio=sr_ratios[1], local_region_shape=[5, 10, 20])
             for i in range(depths[1])])
         self.extra_norm2 = norm_layer(embed_dims[1])
 
@@ -427,14 +430,14 @@ class RGBXTransformer(nn.Module):
         self.block3 = nn.ModuleList([Block(
             dim=embed_dims[2], num_heads=num_heads[2], mlp_ratio=mlp_ratios[2], qkv_bias=qkv_bias, qk_scale=qk_scale,
             drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
-            sr_ratio=sr_ratios[2])
+            sr_ratio=sr_ratios[2], local_region_shape=[5, 10])
             for i in range(depths[2])])
         self.norm3 = norm_layer(embed_dims[2])
 
         self.extra_block3 = nn.ModuleList([Block(
             dim=embed_dims[2], num_heads=num_heads[2], mlp_ratio=mlp_ratios[2], qkv_bias=qkv_bias, qk_scale=qk_scale,
             drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
-            sr_ratio=sr_ratios[2])
+            sr_ratio=sr_ratios[2], local_region_shape=[5, 10])
             for i in range(depths[2])])
         self.extra_norm3 = norm_layer(embed_dims[2])
 
@@ -443,14 +446,14 @@ class RGBXTransformer(nn.Module):
         self.block4 = nn.ModuleList([Block(
             dim=embed_dims[3], num_heads=num_heads[3], mlp_ratio=mlp_ratios[3], qkv_bias=qkv_bias, qk_scale=qk_scale,
             drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
-            sr_ratio=sr_ratios[3])
+            sr_ratio=sr_ratios[3], local_region_shape=[5])
             for i in range(depths[3])])
         self.norm4 = norm_layer(embed_dims[3])
 
         self.extra_block4 = nn.ModuleList([Block(
             dim=embed_dims[3], num_heads=num_heads[3], mlp_ratio=mlp_ratios[3], qkv_bias=qkv_bias, qk_scale=qk_scale,
             drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
-            sr_ratio=sr_ratios[3])
+            sr_ratio=sr_ratios[3], local_region_shape=[5])
             for i in range(depths[3])])
         self.extra_norm4 = norm_layer(embed_dims[3])
 
@@ -495,119 +498,119 @@ class RGBXTransformer(nn.Module):
         """
         x_rgb: B x N x H x W
         """
-        #print("initial x_rgb: ",x_rgb.size())
-        print(f'input:::rgb:{x_rgb.shape} ir:{x_e.shape}')
+        ##print("initial x_rgb: ",x_rgb.size())
+        #print(f'input:::rgb:{x_rgb.shape} ir:{x_e.shape}')
         B = x_rgb.shape[0]
         outs = []
         outs_fused = []
 
         # stage 1
-        print("####################Stage 1############################")
-        print('patch embedding 1')
+        #print("####################Stage 1############################")
+        #print('patch embedding 1')
         x_rgb, H, W = self.patch_embed1(x_rgb)
         # B H*W/16 C
-        #print("s1 x_rgb: ",x_rgb.size())
-        print('IR patch embedding 1')
+        ##print("s1 x_rgb: ",x_rgb.size())
+        #print('IR patch embedding 1')
         x_e, _, _ = self.extra_patch_embed1(x_e)
-        print("$$$$$RGB patch Process$$$$$$")
+        #print("$$$$$RGB patch Process$$$$$$")
         for i, blk in enumerate(self.block1):
-            print(f'Block: {i}')
+            #print(f'Block: {i}')
             x_rgb = blk(x_rgb, H, W)
-        print("$$$$$IR patch Process$$$$$$")
+        #print("$$$$$IR patch Process$$$$$$")
         for i, blk in enumerate(self.extra_block1):
             x_e = blk(x_e, H, W)
         x_rgb = self.norm1(x_rgb)
         x_e = self.extra_norm1(x_e)
-        print(f'****** output after attention blocks:{x_rgb.shape}********')
+        #print(f'****** output after attention blocks:{x_rgb.shape}********')
 
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         x_e = x_e.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
-        print(f'output rgb:{x_rgb.shape} ir:{x_e.shape}')
+        #print(f'output rgb:{x_rgb.shape} ir:{x_e.shape}')
         x_rgb, x_e = self.FRMs[0](x_rgb, x_e)
-        print(f'output after FRM rgb:{x_rgb.shape} ir:{x_e.shape}')
+        ##print(f'output after FRM rgb:{x_rgb.shape} ir:{x_e.shape}')
         x_fused = self.FFMs[0](x_rgb, x_e)
-        print(f'final output:{x_fused.shape}')
+        #print(f'final output:{x_fused.shape}')
         outs.append(x_fused)
         
 
         # stage 2
-        print("####################Stage 2############################")
-        print('patch embedding 2')
+        #print("####################Stage 2############################")
+        #print('patch embedding 2')
         x_rgb, H, W = self.patch_embed2(x_rgb)
-        #print("s2 x_rgb: ",x_rgb.size())
-        print('IR patch embedding 2')
+        ##print("s2 x_rgb: ",x_rgb.size())
+        #print('IR patch embedding 2')
         x_e, _, _ = self.extra_patch_embed2(x_e)
-        print("$$$$$RGB patch Process$$$$$$")
+        #print("$$$$$RGB patch Process$$$$$$")
         for i, blk in enumerate(self.block2):
             x_rgb = blk(x_rgb, H, W)
-        print("$$$$$IR patch Process$$$$$$")
+        #print("$$$$$IR patch Process$$$$$$")
         for i, blk in enumerate(self.extra_block2):
             x_e = blk(x_e, H, W)
         x_rgb = self.norm2(x_rgb)
         x_e = self.extra_norm2(x_e)
-        print(f'****** output after attention blocks:{x_rgb.shape}********')
+        #print(f'****** output after attention blocks:{x_rgb.shape}********')
 
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         x_e = x_e.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
-        print(f'output rgb:{x_rgb.shape} ir:{x_e.shape}')
+        #print(f'output rgb:{x_rgb.shape} ir:{x_e.shape}')
         x_rgb, x_e = self.FRMs[1](x_rgb, x_e)
-        print(f'output after FRM rgb:{x_rgb.shape} ir:{x_e.shape}')
+        ##print(f'output after FRM rgb:{x_rgb.shape} ir:{x_e.shape}')
         x_fused = self.FFMs[1](x_rgb, x_e)
-        print(f'final output:{x_fused.shape}')
+        #print(f'final output:{x_fused.shape}')
         outs.append(x_fused)
         
 
         # stage 3
-        print("####################Stage 3############################")
-        print('patch embedding 3')
+        #print("####################Stage 3############################")
+        #print('patch embedding 3')
         x_rgb, H, W = self.patch_embed3(x_rgb)
-        #print("s3 x_rgb: ",x_rgb.size())
-        print('IR patch embedding 3')
+        ##print("s3 x_rgb: ",x_rgb.size())
+        #print('IR patch embedding 3')
         x_e, _, _ = self.extra_patch_embed3(x_e)
-        print("$$$$$RGB patch Process$$$$$$")
+        #print("$$$$$RGB patch Process$$$$$$")
         for i, blk in enumerate(self.block3):
             x_rgb = blk(x_rgb, H, W)
-        print("$$$$$IR patch Process$$$$$$")
+        #print("$$$$$IR patch Process$$$$$$")
         for i, blk in enumerate(self.extra_block3):
             x_e = blk(x_e, H, W)
         x_rgb = self.norm3(x_rgb)
         x_e = self.extra_norm3(x_e)
-        print(f'****** output after attention blocks:{x_rgb.shape}********')
+        #print(f'****** output after attention blocks:{x_rgb.shape}********')
 
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         x_e = x_e.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
-        print(f'output rgb:{x_rgb.shape} ir:{x_e.shape}')
+        #print(f'output rgb:{x_rgb.shape} ir:{x_e.shape}')
         x_rgb, x_e = self.FRMs[2](x_rgb, x_e)
-        print(f'output after FRM rgb:{x_rgb.shape} ir:{x_e.shape}')
+        ##print(f'output after FRM rgb:{x_rgb.shape} ir:{x_e.shape}')
         x_fused = self.FFMs[2](x_rgb, x_e)
-        print(f'final output:{x_fused.shape}')
+        #print(f'final output:{x_fused.shape}')
         outs.append(x_fused)
         
 
         # stage 4
-        print("####################Stage 4############################")
-        print('patch embedding 4')
+        #print("####################Stage 4############################")
+        #print('patch embedding 4')
         x_rgb, H, W = self.patch_embed4(x_rgb)
-        #print("s4 x_rgb: ",x_rgb.size())
-        print('IR patch embedding  4')
+        ##print("s4 x_rgb: ",x_rgb.size())
+        #print('IR patch embedding  4')
         x_e, _, _ = self.extra_patch_embed4(x_e)
-        print("$$$$$RGB patch Process$$$$$$")
+        #print("$$$$$RGB patch Process$$$$$$")
         for i, blk in enumerate(self.block4):
             x_rgb = blk(x_rgb, H, W)
-        print("$$$$$IR patch Process$$$$$$")
+        #print("$$$$$IR patch Process$$$$$$")
         for i, blk in enumerate(self.extra_block4):
             x_e = blk(x_e, H, W)
         x_rgb = self.norm4(x_rgb)
         x_e = self.extra_norm4(x_e)
-        print(f'****** output after attention blocks:{x_rgb.shape}********')
+        #print(f'****** output after attention blocks:{x_rgb.shape}********')
 
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         x_e = x_e.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
-        print(f'output rgb:{x_rgb.shape} ir:{x_e.shape}')
+        #print(f'output rgb:{x_rgb.shape} ir:{x_e.shape}')
         x_rgb, x_e = self.FRMs[3](x_rgb, x_e)
-        print(f'output after FRM rgb:{x_rgb.shape} ir:{x_e.shape}')
+        ##print(f'output after FRM rgb:{x_rgb.shape} ir:{x_e.shape}')
         x_fused = self.FFMs[3](x_rgb, x_e)
-        print(f'final output:{x_fused.shape}')
+        #print(f'final output:{x_fused.shape}')
         outs.append(x_fused)
         
         return outs
@@ -700,27 +703,27 @@ class mit_b5(RGBXTransformer):
 
 
 if __name__=="__main__":
-    backbone = mit_b0(norm_layer = nn.BatchNorm2d)
+    backbone = mit_b2(norm_layer = nn.BatchNorm2d)
     
-    # print(backbone)
+    # #print(backbone)
     B = 1
     C = 3
     H = 480
     W = 640
-    ms_attention = MultiScaleAttention(32, num_heads=4, sr_ratio=8)
-    # ms_attention = ms_attention.to()
-    ms_attention = nn.DataParallel(ms_attention, device_ids = [0,1])
-    ms_attention.to(f'cuda:{ms_attention.device_ids[0]}', non_blocking=True)
+    # ms_attention = MultiScaleAttention(32, num_heads=4, sr_ratio=8, local_region_shape=[5,10,20,40])
+    # # ms_attention = ms_attention.to()
+    # ms_attention = nn.DataParallel(ms_attention, device_ids = [0,1])
+    # ms_attention.to(f'cuda:{ms_attention.device_ids[0]}', non_blocking=True)
 
-    f = torch.randn(B, 19200, 32).to(ms_attention.device_ids[0])
+    # f = torch.randn(B, 19200, 32).to(ms_attention.device_ids[0])
 
-    print(f'input to multiScaleAttention:{f.shape}')
-    y = ms_attention(f, 120, 160)
+    # #print(f'input to multiScaleAttention:{f.shape}')
+    # y = ms_attention(f, 120, 160)
 
-    # print('attn output: ',y.shape)
-    # rgb = torch.randn(B, C, H, W)
-    # x = torch.randn(B, C, H, W)
-    # output = backbone(rgb, x)
-    # print(output.size())
+    # #print('attn output: ',y.shape)
+    rgb = torch.randn(B, C, H, W)
+    x = torch.randn(B, C, H, W)
+    output = backbone(rgb, x)
+    # #print(output.size())
 
 
