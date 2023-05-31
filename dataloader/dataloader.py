@@ -90,7 +90,7 @@ def get_train_loader(engine, dataset):
     is_shuffle = True
     batch_size = config.batch_size
 
-    if engine.distributed:
+    if engine.distributed:  # False
         print("distributed training: ",engine.distributed)
         train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
         batch_size = config.batch_size // engine.world_size
