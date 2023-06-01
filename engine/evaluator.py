@@ -84,6 +84,7 @@ class Evaluator(object):
         print("models using: ", models)
         for model in models:
             logger.info("Load Model: %s" % model)
+            print('model path: ',model_path)
             self.val_func = load_model(self.network, os.path.join(model_path, model))
             if len(self.devices ) == 1:
                 result_line = self.single_process_evalutation()
