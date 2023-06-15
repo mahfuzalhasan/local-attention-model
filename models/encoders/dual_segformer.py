@@ -133,7 +133,7 @@ class MultiScaleAttention(nn.Module):
         arr = arr.permute(0, 1, 4, 2, 3)
         #print('arr permute: ',arr.shape)
         # arr.shape: B x num_head x Ch x H_n x W_n x p x p  %% p = patch_size
-        patches = arr.unfold(3, patch_size, stride).unfold(4, patch_size, stride).contiguous()
+        patches = arr.unfold(4, patch_size, stride).unfold(3, patch_size, stride).contiguous()
         #print('patches: ',patches.shape)
         # arr.shape: B x num_head x (Ch . H_n . W_n) x p x p 
         # this resembles each head contains (Ch . H_n . W_n) num of pxp patches
@@ -450,14 +450,14 @@ class RGBXTransformer(nn.Module):
         self.block1 = nn.ModuleList([Block(
             dim=embed_dims[0], num_heads=num_heads[0], mlp_ratio=mlp_ratios[0], qkv_bias=qkv_bias, qk_scale=qk_scale,
             drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
-            sr_ratio=sr_ratios[0], local_region_shape=[10, 20, 40])
+            sr_ratio=sr_ratios[0], local_region_shape=[5, 10, 20, 40])
             for i in range(depths[0])])
         self.norm1 = norm_layer(embed_dims[0])
 
         self.extra_block1 = nn.ModuleList([Block(
             dim=embed_dims[0], num_heads=num_heads[0], mlp_ratio=mlp_ratios[0], qkv_bias=qkv_bias, qk_scale=qk_scale,
             drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
-            sr_ratio=sr_ratios[0], local_region_shape=[10, 20, 40])
+            sr_ratio=sr_ratios[0], local_region_shape=[5, 10, 20, 40])
             for i in range(depths[0])])
         self.extra_norm1 = norm_layer(embed_dims[0])
         cur += depths[0]

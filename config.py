@@ -73,7 +73,7 @@ C.warm_up_epoch = 10
 C.fix_bias = True
 C.bn_eps = 1e-3
 C.bn_momentum = 0.1
-C.print_stats = 15
+C.print_stats = 30
 C.device_ids = [0, 1, 2, 3]
 
 """Eval Config"""
