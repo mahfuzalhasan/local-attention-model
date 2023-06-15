@@ -99,6 +99,7 @@ with Engine(custom_parser=parser) as engine:
                                             output_device=engine.local_rank, find_unused_parameters=False)
     else:
         print("multigpu training")
+        print('device ids: ',config.device_ids)
         model = nn.DataParallel(model, device_ids = config.device_ids)
         model.to(f'cuda:{model.device_ids[0]}', non_blocking=True)
         # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

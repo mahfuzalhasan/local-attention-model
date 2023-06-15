@@ -80,7 +80,7 @@ class SegEvaluator(Evaluator):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-e', '--epochs', default='last', type=str)
-    parser.add_argument('-d', '--devices', default='2,3', type=str)
+    parser.add_argument('-d', '--devices', default='0', type=str)
     parser.add_argument('-v', '--verbose', default=False, action='store_true')
     parser.add_argument('--show_image', '-s', default=False,
                         action='store_true')
@@ -113,7 +113,7 @@ if __name__ == "__main__":
     #exit()
     network = segmodel(cfg=config, criterion=None, norm_layer=nn.BatchNorm2d)
     print("multigpu training")
-    network = nn.DataParallel(network, device_ids = config.device_ids)
+    network = nn.DataParallel(network, device_ids = [0])
     network.to(f'cuda:{network.device_ids[0]}', non_blocking=True)
 
     data_setting = {'rgb_root': config.rgb_root_folder,
@@ -140,5 +140,5 @@ if __name__ == "__main__":
         saved_model_path = os.path.join(config.checkpoint_dir, "05-31-23_0311")
         """ segmentor.run(config.checkpoint_dir, "NYUDV2_CMX+Segformer-B2.pth", config.val_log_file,
                       config.link_val_log_file) """
-        segmentor.run(saved_model_path, "model_495.pth", config.val_log_file,
+        segmentor.run(saved_model_path, "model_450.pth", config.val_log_file,
                       config.link_val_log_file)

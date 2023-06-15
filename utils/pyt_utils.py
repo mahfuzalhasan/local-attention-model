@@ -159,11 +159,13 @@ def load_model(model, model_file, is_restore=False):
         return model
 
     if isinstance(model_file, str):
+        #device_cpu = torch.device('cpu')
         state_dict = torch.load(model_file)
         print("keys in loaded model: ",state_dict.keys())
         print("######################################")
         #exit()
         if 'model' in state_dict.keys():
+            print("keys model")
             state_dict = state_dict['model']
         elif 'state_dict' in state_dict.keys():
             state_dict = state_dict['state_dict']

@@ -266,7 +266,7 @@ class Evaluator(object):
         input_data = np.ascontiguousarray(input_data[None, :, :, :],
                                           dtype=np.float32)
         input_data = torch.FloatTensor(input_data).cuda(device)
-
+        
         with torch.cuda.device(input_data.get_device()):
             self.val_func.eval()
             self.val_func.to(input_data.get_device())
@@ -386,6 +386,7 @@ class Evaluator(object):
         with torch.cuda.device(input_data.get_device()):
             self.val_func.eval()
             self.val_func.to(input_data.get_device())
+            #print(f'device model:{self.val_func.get_device()} input_device:{input_data.get_device()}')
             with torch.no_grad():
                 score = self.val_func(input_data, input_modal_x)
                 score = score[0]
