@@ -140,5 +140,5 @@ if __name__ == "__main__":
         saved_model_path = os.path.join(config.checkpoint_dir, "05-31-23_0311")
         """ segmentor.run(config.checkpoint_dir, "NYUDV2_CMX+Segformer-B2.pth", config.val_log_file,
                       config.link_val_log_file) """
-        segmentor.run(saved_model_path, "model_450.pth", config.val_log_file,
+        segmentor.run(saved_model_path, "model_495.pth", config.val_log_file,
                       config.link_val_log_file)
