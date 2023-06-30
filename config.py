@@ -13,13 +13,15 @@ cfg = C
 C.seed = 12345
 
 remoteip = os.popen('pwd').read()
-C.root_dir = os.path.abspath(os.path.join(os.getcwd(), './'))
+#C.root_dir = os.path.abspath(os.path.join(os.getcwd(), './'))
+C.root_dir = os.getcwd()
 C.abs_dir = osp.realpath(".")
 
 # Dataset config
 """Dataset Path"""
 C.dataset_name = 'NYUDepthv2'
-C.dataset_path = r'./data/NYUDepthv2'
+#C.dataset_path = r'./data/NYUDepthv2'
+C.dataset_path = osp.join(C.root_dir, 'data/NYUDepthv2')
 C.rgb_root_folder = osp.join(C.dataset_path, 'RGB')
 C.rgb_format = '.jpg'
 C.gt_root_folder = osp.join(C.dataset_path, 'Label')
@@ -50,10 +52,10 @@ C.norm_std = np.array([0.229, 0.224, 0.225])
 
 """ Settings for network, this would be different for each kind of model"""
 C.backbone = 'mit_b2' # Remember change the path below.
-#C.pretrained_model = C.root_dir + '/pretrained/segformer/mit_b2.pth'
+C.pretrained_model = osp.join(C.root_dir, 'pretrained/mit_b2.pth')
 #C.pretrained_model = "../../Results/saved_models/NYUDV2_CMX+Segformer-B2.pth"
 # C.pretrained_model = "./Results/saved_models/segformer/mit_b2.pth"
-C.pretrained_model = "./pretrained/mit_b2.pth"
+#C.pretrained_model = "./pretrained/mit_b2.pth"
 C.decoder = 'MLPDecoder'
 C.decoder_embed_dim = 512
 C.optimizer = 'AdamW'
@@ -63,7 +65,7 @@ C.lr = 6e-5
 C.lr_power = 0.9
 C.momentum = 0.9
 C.weight_decay = 0.01
-C.batch_size = 4
+C.batch_size = 8 #4
 C.nepochs = 500
 C.niters_per_epoch = C.num_train_imgs // C.batch_size  + 1
 C.num_workers = 16
@@ -74,7 +76,8 @@ C.fix_bias = True
 C.bn_eps = 1e-3
 C.bn_momentum = 0.1
 C.print_stats = 30
-C.device_ids = [0, 1, 2, 3]
+C.device_ids = [0, 1] # for mahdi
+#C.device_ids = [0, 1, 2, 3] # for sakin
 
 """Eval Config"""
 C.eval_iter = 25

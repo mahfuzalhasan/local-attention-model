@@ -1,6 +1,6 @@
 __pycache__/*
 */__pycache__/*
-#*.pyc
+*.pyc
 
 .vscode/*
 Results/*
@@ -12,4 +12,5 @@ pretrained/*
 
 # mzaman
 Config/*
-
+*.slurm
+slurm_logs*/

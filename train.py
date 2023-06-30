@@ -29,6 +29,9 @@ logger = get_logger()
 
 os.environ['MASTER_PORT'] = '169710'
 
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_dir)
+
 # print("parser: ",parser)
 
 with Engine(custom_parser=parser) as engine:
@@ -129,8 +132,9 @@ with Engine(custom_parser=parser) as engine:
 
         for idx in pbar:
             engine.update_iteration(epoch, idx)
-
-            minibatch = dataloader.next()
+            #print('epoch: ', epoch, 'idx: ', idx)
+            #print(len(dataloader))
+            minibatch = next(dataloader) #minibatch = dataloader.next()
             imgs = minibatch['data']
             gts = minibatch['label']
             modal_xs = minibatch['modal_x']

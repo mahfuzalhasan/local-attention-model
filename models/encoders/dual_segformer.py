@@ -5,10 +5,20 @@ from functools import partial
 
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 import sys
-sys.path.append('..')
-sys.path.append('...')
-from ..net_utils import FeatureFusionModule as FFM
-from ..net_utils import FeatureRectifyModule as FRM
+#sys.path.append('..')
+#sys.path.append('...')
+
+import os
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_dir)
+parent_dir = os.path.abspath(os.path.join(current_dir, os.pardir)) 
+sys.path.append(parent_dir)
+
+model_dir = os.path.abspath(os.path.join(parent_dir, os.pardir))
+sys.path.append(model_dir)
+
+from net_utils import FeatureFusionModule as FFM
+from net_utils import FeatureRectifyModule as FRM
 from fusion import iAFF
 import math
 import time
@@ -219,13 +229,24 @@ class MultiScaleAttention(nn.Module):
             #exit()
             A.append(a_1)
 
-        ###print('$$$$multi attention shapes$$$$')
-        # for attn_o in A:
-        #     ##print(attn_o.shape)
-        A = torch.cat(A, dim=2)
-        A = self.final_proj(A)
-        # A = 
-        ###print("A: ",A.size())
+        #print('$$$$multi attention shapes$$$$')
+        #for attn_o in A:
+        #    print('attn_o: ', attn_o.shape)
+        
+        # For weighted adjoining of attentional weights ~~~~~~~~~~~~~~~~~~~
+        A = torch.stack(A)
+        #print("A before cat: ", A.shape)        
+        weights = torch.linspace(0.1, 1, len(self.local_region_shape)+1) # +1 for global
+        weights = torch.cat((weights[-1:], weights[:-1]), dim=0) # putting 1 first for the weight on global attn. [1,2,3,4,5] --> [5,4,3,2,1]       
+        weights = weights.to(A.device)
+        #print('weights:', weights)       
+        A = torch.einsum('ijkl,i->jkl', A, weights)
+        #print('A after einsum: ', A.shape)
+
+        #A = torch.cat(A, dim=2)
+        #print('A after cat: ', A.size())
+        #A = self.final_proj(A) 
+        #print("A final: ",A.size())
         
 
         return A

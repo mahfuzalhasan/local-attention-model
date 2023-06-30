@@ -203,7 +203,6 @@ def parse_devices(input_devices):
 
     devices = []
     # input_devices 
-    # print("input_devices: ",input_devices)
     for d in input_devices.split(','):
         if '-' in d:
             start_device, end_device = d.split('-')[0], d.split('-')[1]
