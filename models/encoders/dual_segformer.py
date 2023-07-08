@@ -236,7 +236,7 @@ class MultiScaleAttention(nn.Module):
             #exit()
             A.append(a_1)
 
-        ##print('$$$$multi attention shapes$$$$')
+        # print('$$$$multi attention shapes$$$$')
         #for attn_o in A:
         #    #print('attn_o: ', attn_o.shape)
         

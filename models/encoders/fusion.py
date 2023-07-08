@@ -78,9 +78,10 @@ class iAFF(nn.Module):
 
 
 class AFF(nn.Module):
-    '''
-    ????? AFF
-    '''
+
+    ####
+    #  
+    ####
 
     def __init__(self, channels=64, r=4):
         super(AFF, self).__init__()
