@@ -524,7 +524,16 @@ class RGBXTransformer(nn.Module):
         ######print(f'output after FRM rgb:{x_rgb.shape} ir:{x_e.shape}')
         x_fused = self.FFMs[0](x_rgb, x_e)
         ####print(f'final output:{x_fused.shape}')
+
+        ########## one way to go
+        ### 10x10 20x20 40x40 80x80 5x5 --> 5 x_fused
+        #### combining 5 fusion result here  --> final x_fused
+
         outs.append(x_fused)
+
+        ## 2nd way 
+        ## fusion --> 10x10 20x20 40x40 80x80 5x5
+        ## outs_1.append(x_fused_10x10) outs_2.append(x_fused_20x20)
         
 
         # stage 2
@@ -606,11 +615,14 @@ class RGBXTransformer(nn.Module):
         x_fused = self.FFMs[3](x_rgb, x_e)
         ####print(f'final output:{x_fused.shape}')
         outs.append(x_fused)
-        
+        ### outs_1, outs_2
         return outs
+
 
     def forward(self, x_rgb, x_e):
         out = self.forward_features(x_rgb, x_e)
+        #### outs_1 --> decoder -->result
+        #### outs_2 --> decoder -->result
         return out
 
 
