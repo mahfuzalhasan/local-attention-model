@@ -76,8 +76,8 @@ C.fix_bias = True
 C.bn_eps = 1e-3
 C.bn_momentum = 0.1
 C.print_stats = 30
-C.device_ids = [0, 1] # for mahdi
-#C.device_ids = [0, 1, 2, 3] # for sakin
+# C.device_ids = [0, 1] # for mahdi
+C.device_ids = [0, 1, 2, 3] # for sakin
 
 """Eval Config"""
 C.eval_iter = 25
