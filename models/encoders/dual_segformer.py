@@ -321,38 +321,38 @@ class RGBXTransformer(nn.Module):
         """
         x_rgb: B x N x H x W
         """
-        #####print("initial x_rgb: ",x_rgb.size())
-        #####print(f'input:::rgb:{x_rgb.shape} ir:{x_e.shape}')
+        print("initial x_rgb: ",x_rgb.size())
+        print(f'input:::rgb:{x_rgb.shape} ir:{x_e.shape}')
         B = x_rgb.shape[0]
         outs = []
         outs_fused = []
 
         # stage 1
-        #####print("####################Stage 1############################")
-        #####print('patch embedding 1')
+        print("####################Stage 1############################")
+        print('patch embedding 1')
         x_rgb, H, W = self.patch_embed1(x_rgb)
         # B H*W/16 C
-        #######print("s1 x_rgb: ",x_rgb.size())
-        ######print('IR patch embedding 1')
+        print("s1 x_rgb: ",x_rgb.size())
+        print('IR patch embedding 1')
         x_e, _, _ = self.extra_patch_embed1(x_e)
-        #####print("$$$$$RGB patch Process$$$$$$")
+        print("$$$$$RGB patch Process$$$$$$")
         for i, blk in enumerate(self.block1):
-            ######print(f'Block: {i}')
+            print(f'Block: {i}')
             x_rgb = blk(x_rgb, H, W)
-        #####print("$$$$$IR patch Process$$$$$$")
+        print("$$$$$IR patch Process$$$$$$")
         for i, blk in enumerate(self.extra_block1):
             x_e = blk(x_e, H, W)
         x_rgb = self.norm1(x_rgb)
         x_e = self.extra_norm1(x_e)
-        ######print(f'****** output after attention blocks:{x_rgb.shape}********')
+        print(f'****** output after attention blocks:{x_rgb.shape}********')
 
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         x_e = x_e.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
-        ######print(f'output rgb:{x_rgb.shape} ir:{x_e.shape}')
+        print(f'output rgb:{x_rgb.shape} ir:{x_e.shape}')
         x_rgb, x_e = self.FRMs[0](x_rgb, x_e)
-        #######print(f'output after FRM rgb:{x_rgb.shape} ir:{x_e.shape}')
+        print(f'output after FRM rgb:{x_rgb.shape} ir:{x_e.shape}')
         x_fused = self.FFMs[0](x_rgb, x_e)
-        #####print(f'final output:{x_fused.shape}')
+        print(f'final output:{x_fused.shape}')
 
         ########## one way to go
         ### 10x10 20x20 40x40 80x80 5x5 --> 5 x_fused
@@ -366,7 +366,7 @@ class RGBXTransformer(nn.Module):
         
 
         # stage 2
-        #####print("####################Stage 2############################")
+        print("####################Stage 2############################")
         #####print('patch embedding 2')
         x_rgb, H, W = self.patch_embed2(x_rgb)
         #######print("s2 x_rgb: ",x_rgb.size())
@@ -388,12 +388,12 @@ class RGBXTransformer(nn.Module):
         x_rgb, x_e = self.FRMs[1](x_rgb, x_e)
         #######print(f'output after FRM rgb:{x_rgb.shape} ir:{x_e.shape}')
         x_fused = self.FFMs[1](x_rgb, x_e)
-        #####print(f'final output:{x_fused.shape}')
+        print(f'final output:{x_fused.shape}')
         outs.append(x_fused)
         
 
         # stage 3
-        #####print("####################Stage 3############################")
+        print("####################Stage 3############################")
         #####print('patch embedding 3')
         x_rgb, H, W = self.patch_embed3(x_rgb)
         #######print("s3 x_rgb: ",x_rgb.size())
@@ -415,12 +415,12 @@ class RGBXTransformer(nn.Module):
         x_rgb, x_e = self.FRMs[2](x_rgb, x_e)
         #######print(f'output after FRM rgb:{x_rgb.shape} ir:{x_e.shape}')
         x_fused = self.FFMs[2](x_rgb, x_e)
-        #####print(f'final output:{x_fused.shape}')
+        print(f'final output:{x_fused.shape}')
         outs.append(x_fused)
         
 
         # stage 4
-        #####print("####################Stage 4############################")
+        print("####################Stage 4############################")
         #####print('patch embedding 4')
         x_rgb, H, W = self.patch_embed4(x_rgb)
         #######print("s4 x_rgb: ",x_rgb.size())
@@ -442,7 +442,7 @@ class RGBXTransformer(nn.Module):
         x_rgb, x_e = self.FRMs[3](x_rgb, x_e)
         #######print(f'output after FRM rgb:{x_rgb.shape} ir:{x_e.shape}')
         x_fused = self.FFMs[3](x_rgb, x_e)
-        #####print(f'final output:{x_fused.shape}')
+        print(f'final output:{x_fused.shape}')
         outs.append(x_fused)
         ### outs_1, outs_2
         return outs
@@ -551,7 +551,7 @@ if __name__=="__main__":
     rgb = torch.randn(B, C, H, W)
     x = torch.randn(B, C, H, W)
     outputs = backbone(rgb, x)
-    # for output in outputs:
-    #     #print(output.size())
+    for output in outputs:
+        print(output.size())
 
 
