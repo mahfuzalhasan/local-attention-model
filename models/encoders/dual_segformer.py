@@ -232,9 +232,6 @@ class MultiScaleAttention(nn.Module):
             #exit()
             A.append(a_1)
 
-        ###print('$$$$multi attention shapes$$$$')
-        # for attn_o in A:
-        #     print(attn_o.shape)
 
         # A = torch.cat(A, dim=2)
         # A = self.final_proj(A)
@@ -242,9 +239,6 @@ class MultiScaleAttention(nn.Module):
         attn_fused = self.fuse_ms_attn_map(A, H, W)
         attn_fused = attn_fused.reshape(B, C, N).transpose(1, 2)
         attn_fused = self.final_proj(attn_fused)
-
-        # A = 
-        # print("A: ",A.size())
         
 
         return A
@@ -777,11 +771,11 @@ if __name__=="__main__":
     # ####print(f'input to multiScaleAttention:{f.shape}')
     y = ms_attention(f, 120, 160)
 
-    print('attn output: ',y.shape)
-    # rgb = torch.randn(B, C, H, W)
-    # x = torch.randn(B, C, H, W)
-    # outputs = backbone(rgb, x)
+    # print('attn output: ',y.shape)
+    # # rgb = torch.randn(B, C, H, W)
+    # # x = torch.randn(B, C, H, W)
+    # # outputs = backbone(rgb, x)
     # for output in outputs:
-    #     ##print(output.size())
+    #     print(output.size())
 
 
