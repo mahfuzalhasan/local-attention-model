@@ -172,9 +172,6 @@ class MultiScaleAttention(nn.Module):
         
         attn_fused = self.final_proj(attn_fused) 
         return attn_fused
-        
-
-        return A
 
 if __name__=="__main__":
     # #######print(backbone)
