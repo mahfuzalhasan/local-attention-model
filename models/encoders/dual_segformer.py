@@ -139,13 +139,13 @@ class OverlapPatchEmbed(nn.Module):
         super().__init__()
         img_size = to_2tuple(img_size)
         patch_size = to_2tuple(patch_size)
-        ########print('patch size: ',patch_size)
+        #########print('patch size: ',patch_size)
 
         self.img_size = img_size
         self.patch_size = patch_size
         self.H, self.W = img_size[0] // patch_size[0], img_size[1] // patch_size[1]
         self.num_patches = self.H * self.W
-        ########print('num_patches: ',self.num_patches)
+        #########print('num_patches: ',self.num_patches)
         self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=stride,
                               padding=(patch_size[0] // 2, patch_size[1] // 2))
         self.norm = nn.LayerNorm(embed_dim)
@@ -169,20 +169,20 @@ class OverlapPatchEmbed(nn.Module):
 
     def forward(self, x):
         # B C H W
-        #####print('forward --> overlap patch embedding')
-        #######print('input x: ',x.shape)
-        #######print('proj layer: ',self.proj)
+        ######print('forward --> overlap patch embedding')
+        ########print('input x: ',x.shape)
+        ########print('proj layer: ',self.proj)
         x = self.proj(x)
         
         _, _, H, W = x.shape
-        #####print(f'x after proj:{x.shape}')
-        #######print(f'after projection H:{H} W:{W}')
+        ######print(f'x after proj:{x.shape}')
+        ########print(f'after projection H:{H} W:{W}')
         x = x.flatten(2).transpose(1, 2)
-        ########print(f'x flatten:{x.shape}')
+        #########print(f'x flatten:{x.shape}')
         # B H*W/16 C
         x = self.norm(x)
-        #####print(f'x final:{x.shape}, H:{H} W:{W}')
-        ########print(f'final x:{x.shape}')
+        ######print(f'x final:{x.shape}, H:{H} W:{W}')
+        #########print(f'final x:{x.shape}')
 
         return x, H, W
 
@@ -321,38 +321,38 @@ class RGBXTransformer(nn.Module):
         """
         x_rgb: B x N x H x W
         """
-        print("initial x_rgb: ",x_rgb.size())
-        print(f'input:::rgb:{x_rgb.shape} ir:{x_e.shape}')
+        #print("initial x_rgb: ",x_rgb.size())
+        #print(f'input:::rgb:{x_rgb.shape} ir:{x_e.shape}')
         B = x_rgb.shape[0]
         outs = []
         outs_fused = []
 
         # stage 1
-        print("####################Stage 1############################")
-        print('patch embedding 1')
+        #print("####################Stage 1############################")
+        #print('patch embedding 1')
         x_rgb, H, W = self.patch_embed1(x_rgb)
         # B H*W/16 C
-        print("s1 x_rgb: ",x_rgb.size())
-        print('IR patch embedding 1')
+        #print("s1 x_rgb: ",x_rgb.size())
+        #print('IR patch embedding 1')
         x_e, _, _ = self.extra_patch_embed1(x_e)
-        print("$$$$$RGB patch Process$$$$$$")
+        #print("$$$$$RGB patch Process$$$$$$")
         for i, blk in enumerate(self.block1):
-            print(f'Block: {i}')
+            #print(f'Block: {i}')
             x_rgb = blk(x_rgb, H, W)
-        print("$$$$$IR patch Process$$$$$$")
+        #print("$$$$$IR patch Process$$$$$$")
         for i, blk in enumerate(self.extra_block1):
             x_e = blk(x_e, H, W)
         x_rgb = self.norm1(x_rgb)
         x_e = self.extra_norm1(x_e)
-        print(f'****** output after attention blocks:{x_rgb.shape}********')
+        #print(f'****** output after attention blocks:{x_rgb.shape}********')
 
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         x_e = x_e.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
-        print(f'output rgb:{x_rgb.shape} ir:{x_e.shape}')
+        #print(f'output rgb:{x_rgb.shape} ir:{x_e.shape}')
         x_rgb, x_e = self.FRMs[0](x_rgb, x_e)
-        print(f'output after FRM rgb:{x_rgb.shape} ir:{x_e.shape}')
+        #print(f'output after FRM rgb:{x_rgb.shape} ir:{x_e.shape}')
         x_fused = self.FFMs[0](x_rgb, x_e)
-        print(f'final output:{x_fused.shape}')
+        #print(f'final output:{x_fused.shape}')
 
         ########## one way to go
         ### 10x10 20x20 40x40 80x80 5x5 --> 5 x_fused
@@ -366,83 +366,83 @@ class RGBXTransformer(nn.Module):
         
 
         # stage 2
-        print("####################Stage 2############################")
-        #####print('patch embedding 2')
+        #print("####################Stage 2############################")
+        ######print('patch embedding 2')
         x_rgb, H, W = self.patch_embed2(x_rgb)
-        #######print("s2 x_rgb: ",x_rgb.size())
-        ######print('IR patch embedding 2')
+        ########print("s2 x_rgb: ",x_rgb.size())
+        #######print('IR patch embedding 2')
         x_e, _, _ = self.extra_patch_embed2(x_e)
-        #####print("$$$$$RGB patch Process$$$$$$")
+        ######print("$$$$$RGB patch Process$$$$$$")
         for i, blk in enumerate(self.block2):
             x_rgb = blk(x_rgb, H, W)
-        #####print("$$$$$IR patch Process$$$$$$")
+        ######print("$$$$$IR patch Process$$$$$$")
         for i, blk in enumerate(self.extra_block2):
             x_e = blk(x_e, H, W)
         x_rgb = self.norm2(x_rgb)
         x_e = self.extra_norm2(x_e)
-        ######print(f'****** output after attention blocks:{x_rgb.shape}********')
+        #######print(f'****** output after attention blocks:{x_rgb.shape}********')
 
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         x_e = x_e.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
-        ######print(f'output rgb:{x_rgb.shape} ir:{x_e.shape}')
+        #######print(f'output rgb:{x_rgb.shape} ir:{x_e.shape}')
         x_rgb, x_e = self.FRMs[1](x_rgb, x_e)
-        #######print(f'output after FRM rgb:{x_rgb.shape} ir:{x_e.shape}')
+        ########print(f'output after FRM rgb:{x_rgb.shape} ir:{x_e.shape}')
         x_fused = self.FFMs[1](x_rgb, x_e)
-        print(f'final output:{x_fused.shape}')
+        #print(f'final output:{x_fused.shape}')
         outs.append(x_fused)
         
 
         # stage 3
-        print("####################Stage 3############################")
-        #####print('patch embedding 3')
+        #print("####################Stage 3############################")
+        ######print('patch embedding 3')
         x_rgb, H, W = self.patch_embed3(x_rgb)
-        #######print("s3 x_rgb: ",x_rgb.size())
-        ######print('IR patch embedding 3')
+        ########print("s3 x_rgb: ",x_rgb.size())
+        #######print('IR patch embedding 3')
         x_e, _, _ = self.extra_patch_embed3(x_e)
-        #####print("$$$$$RGB patch Process$$$$$$")
+        ######print("$$$$$RGB patch Process$$$$$$")
         for i, blk in enumerate(self.block3):
             x_rgb = blk(x_rgb, H, W)
-        #####print("$$$$$IR patch Process$$$$$$")
+        ######print("$$$$$IR patch Process$$$$$$")
         for i, blk in enumerate(self.extra_block3):
             x_e = blk(x_e, H, W)
         x_rgb = self.norm3(x_rgb)
         x_e = self.extra_norm3(x_e)
-        ######print(f'****** output after attention blocks:{x_rgb.shape}********')
+        #######print(f'****** output after attention blocks:{x_rgb.shape}********')
 
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         x_e = x_e.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
-        ######print(f'output rgb:{x_rgb.shape} ir:{x_e.shape}')
+        #######print(f'output rgb:{x_rgb.shape} ir:{x_e.shape}')
         x_rgb, x_e = self.FRMs[2](x_rgb, x_e)
-        #######print(f'output after FRM rgb:{x_rgb.shape} ir:{x_e.shape}')
+        ########print(f'output after FRM rgb:{x_rgb.shape} ir:{x_e.shape}')
         x_fused = self.FFMs[2](x_rgb, x_e)
-        print(f'final output:{x_fused.shape}')
+        #print(f'final output:{x_fused.shape}')
         outs.append(x_fused)
         
 
         # stage 4
-        print("####################Stage 4############################")
-        #####print('patch embedding 4')
+        #print("####################Stage 4############################")
+        ######print('patch embedding 4')
         x_rgb, H, W = self.patch_embed4(x_rgb)
-        #######print("s4 x_rgb: ",x_rgb.size())
-        ######print('IR patch embedding  4')
+        ########print("s4 x_rgb: ",x_rgb.size())
+        #######print('IR patch embedding  4')
         x_e, _, _ = self.extra_patch_embed4(x_e)
-        #####print("$$$$$RGB patch Process$$$$$$")
+        ######print("$$$$$RGB patch Process$$$$$$")
         for i, blk in enumerate(self.block4):
             x_rgb = blk(x_rgb, H, W)
-        #####print("$$$$$IR patch Process$$$$$$")
+        ######print("$$$$$IR patch Process$$$$$$")
         for i, blk in enumerate(self.extra_block4):
             x_e = blk(x_e, H, W)
         x_rgb = self.norm4(x_rgb)
         x_e = self.extra_norm4(x_e)
-        ######print(f'****** output after attention blocks:{x_rgb.shape}********')
+        #######print(f'****** output after attention blocks:{x_rgb.shape}********')
 
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         x_e = x_e.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
-        ######print(f'output rgb:{x_rgb.shape} ir:{x_e.shape}')
+        #######print(f'output rgb:{x_rgb.shape} ir:{x_e.shape}')
         x_rgb, x_e = self.FRMs[3](x_rgb, x_e)
-        #######print(f'output after FRM rgb:{x_rgb.shape} ir:{x_e.shape}')
+        ########print(f'output after FRM rgb:{x_rgb.shape} ir:{x_e.shape}')
         x_fused = self.FFMs[3](x_rgb, x_e)
-        print(f'final output:{x_fused.shape}')
+        #print(f'final output:{x_fused.shape}')
         outs.append(x_fused)
         ### outs_1, outs_2
         return outs
@@ -459,7 +459,7 @@ def load_dualpath_model(model, model_file):
     # load raw state_dict
     t_start = time.time()
     if isinstance(model_file, str):
-        ####print("string file")
+        #####print("string file")
         raw_state_dict = torch.load(model_file, map_location=torch.device('cpu'))
         #raw_state_dict = torch.load(model_file)
         if 'model' in raw_state_dict.keys():
@@ -469,7 +469,7 @@ def load_dualpath_model(model, model_file):
     
     state_dict = {}
     for k, v in raw_state_dict.items():
-        # ####print("keys: ", k)
+        # #####print("keys: ", k)
         if k.find('patch_embed') >= 0:
             state_dict[k] = v
             state_dict[k.replace('patch_embed', 'extra_patch_embed')] = v
@@ -542,7 +542,7 @@ class mit_b5(RGBXTransformer):
 if __name__=="__main__":
     backbone = mit_b2(norm_layer = nn.BatchNorm2d)
     
-    # ######print(backbone)
+    # #######print(backbone)
     B = 4
     C = 3
     H = 480
@@ -551,7 +551,7 @@ if __name__=="__main__":
     rgb = torch.randn(B, C, H, W)
     x = torch.randn(B, C, H, W)
     outputs = backbone(rgb, x)
-    for output in outputs:
-        print(output.size())
+    # for output in outputs:
+    #     #print(output.size())
 
 

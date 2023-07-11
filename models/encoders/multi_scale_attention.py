@@ -165,8 +165,8 @@ class MultiScaleAttention(nn.Module):
             A.append(a_1)
 
         #print('$$$$multi attention shapes$$$$')
-        for attn_o in A:
-            #print(attn_o.shape)
+        # for attn_o in A:
+        #     #print(attn_o.shape)
         attn_fused = self.fuse_ms_attn_map(A, H, W)
         attn_fused = attn_fused.reshape(B, C, N).transpose(1, 2)
         
