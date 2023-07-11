@@ -25,46 +25,49 @@ class iAFF(nn.Module):
         # ?????
         self.local_att = nn.Sequential(
             nn.Conv2d(channels, inter_channels, kernel_size=1, stride=1, padding=0),
-            nn.BatchNorm2d(inter_channels),
+            nn.InstanceNorm2d(inter_channels),
             nn.ReLU(inplace=True),
             nn.Conv2d(inter_channels, channels, kernel_size=1, stride=1, padding=0),
-            nn.BatchNorm2d(channels),
+            nn.InstanceNorm2d(channels),
         )
 
         # ?????
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.global_att = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1),
             nn.Conv2d(channels, inter_channels, kernel_size=1, stride=1, padding=0),
-            nn.BatchNorm2d(inter_channels),
+            nn.InstanceNorm2d(inter_channels),
             nn.ReLU(inplace=True),
             nn.Conv2d(inter_channels, channels, kernel_size=1, stride=1, padding=0),
-            nn.BatchNorm2d(channels),
+            nn.InstanceNorm2d(channels),
         )
 
         # ????????
         self.local_att2 = nn.Sequential(
             nn.Conv2d(channels, inter_channels, kernel_size=1, stride=1, padding=0),
-            nn.BatchNorm2d(inter_channels),
+            nn.InstanceNorm2d(inter_channels),
             nn.ReLU(inplace=True),
             nn.Conv2d(inter_channels, channels, kernel_size=1, stride=1, padding=0),
-            nn.BatchNorm2d(channels),
+            nn.InstanceNorm2d(channels),
         )
         # ????????
         self.global_att2 = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
             nn.Conv2d(channels, inter_channels, kernel_size=1, stride=1, padding=0),
-            nn.BatchNorm2d(inter_channels),
+            nn.InstanceNorm2d(inter_channels),
             nn.ReLU(inplace=True),
             nn.Conv2d(inter_channels, channels, kernel_size=1, stride=1, padding=0),
-            nn.BatchNorm2d(channels),
+            nn.InstanceNorm2d(channels),
         )
 
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x, residual):
         xa = x + residual
+        print(f'x:{x.shape} res:{residual.shape} xa:{xa.shape}')
+
         xl = self.local_att(xa)
-        xg = self.global_att(xa)
+        x_avg = self.avg_pool(xa)
+        xg = self.global_att(x_avg)
         xlg = xl + xg
         wei = self.sigmoid(xlg)
         xi = x * wei + residual * (1 - wei)

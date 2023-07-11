@@ -9,7 +9,7 @@ sys.path.append('..')
 sys.path.append('...')
 from ..net_utils import FeatureFusionModule as FFM
 from ..net_utils import FeatureRectifyModule as FRM
-from fusion import iAFF
+from .fusion import iAFF
 import math
 import time
 # from engine.logger import get_logger
@@ -97,9 +97,22 @@ class MultiScaleAttention(nn.Module):
             self.sr = nn.Conv2d(dim, dim, kernel_size=sr_ratio, stride=sr_ratio)
             self.norm = nn.LayerNorm(dim)
 
-        # self.attn_fusion = iAFF(dim)
-        self.final_proj = nn.Linear(dim * (len(self.local_region_shape)+1), dim)
+        self.attn_fusion = iAFF(dim)
+        # self.final_proj = nn.Linear(dim * (len(self.local_region_shape)+1), dim)
+        self.final_proj = nn.Linear(dim, dim)
         self.apply(self._init_weights)
+
+    def fuse_ms_attn_map(self, A, H, W):
+        B, N, C = A[0].shape
+        output = A[1].permute(0, 2, 1).contiguous().view(B, C, H, W)
+        global_attn = A[0].permute(0, 2, 1).contiguous().view(B, C, H, W)
+        #print('shapes: ', output.shape, global_attn.shape)
+        for i in range(2,len(A)):
+            output = self.attn_fusion(output, A[i].permute(0, 2, 1).contiguous().view(B, C, H, W))
+        output = self.attn_fusion(output, global_attn)
+        # print('final fused: ',output.shape)
+        return output
+
 
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
@@ -221,11 +234,17 @@ class MultiScaleAttention(nn.Module):
 
         ###print('$$$$multi attention shapes$$$$')
         # for attn_o in A:
-        #     ##print(attn_o.shape)
-        A = torch.cat(A, dim=2)
-        A = self.final_proj(A)
+        #     print(attn_o.shape)
+
+        # A = torch.cat(A, dim=2)
+        # A = self.final_proj(A)
+
+        attn_fused = self.fuse_ms_attn_map(A, H, W)
+        attn_fused = attn_fused.reshape(B, C, N).transpose(1, 2)
+        attn_fused = self.final_proj(attn_fused)
+
         # A = 
-        ###print("A: ",A.size())
+        # print("A: ",A.size())
         
 
         return A
@@ -336,6 +355,7 @@ class Block(nn.Module):
                 m.bias.data.zero_()
 
     def forward(self, x, H, W):
+        print('input to block: ',x.shape)
         x = x + self.drop_path(self.attn(self.norm1(x), H, W))
         x = x + self.drop_path(self.mlp(self.norm2(x), H, W))
 
