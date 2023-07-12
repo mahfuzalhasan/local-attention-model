@@ -76,6 +76,8 @@ C.bn_momentum = 0.1
 C.print_stats = 30
 # C.device_ids = [0, 1] # for mahdi
 C.device_ids = [0, 1, 2, 3] # for sakin
+resume_train = True
+resume_model_path = ''
 
 """Eval Config"""
 C.eval_iter = 25

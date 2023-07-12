@@ -113,13 +113,25 @@ with Engine(custom_parser=parser) as engine:
     # if engine.continue_state_object:
     #     engine.restore_checkpoint()
 
+    starting_epoch = 1
+    if config.resume_train:
+        print('Loading model to resume train')
+        state_dict = torch.load(config.resume_model_path)
+        model = model.load_state_dict(state_dict['model'])
+        optimizer.load_state_dict(state_dict['optimizer'])
+        starting_epoch = state_dict['epoch']
+
+        print('model loading done')
+
+
+
     optimizer.zero_grad()
     model.train()
     logger.info('begin trainning:')
     
     # total epoch
     # for epoch in range(engine.state.epoch, config.nepochs+1):
-    for epoch in range(1, config.nepochs):
+    for epoch in range(starting_epoch, config.nepochs):
         if engine.distributed:
             train_sampler.set_epoch(epoch)
         bar_format = '{desc}[{elapsed}<{remaining},{rate_fmt}]'
