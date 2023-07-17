@@ -90,8 +90,8 @@ if __name__ == "__main__":
     all_dev = parse_devices(args.devices)
 
 
-    data_dir = r'./data/nyudv2'
-    splits = sio.loadmat(os.path.join(data_dir,'splits.mat'))
+    #data_dir = r'./data/nyudv2'
+    splits = sio.loadmat(os.path.join(config.dataset_path,'splits.mat'))
 
     train = splits['trainNdxs']
     test = splits['testNdxs']
@@ -137,8 +137,8 @@ if __name__ == "__main__":
                                  config.eval_scale_array, config.eval_flip,
                                  all_dev, args.verbose, args.save_path,
                                  args.show_image)
-        saved_model_path = os.path.join(config.checkpoint_dir, "06-28-23_0228")
+        saved_model_path = os.path.join(config.checkpoint_dir, "07-14-23_1803")
         """ segmentor.run(config.checkpoint_dir, "NYUDV2_CMX+Segformer-B2.pth", config.val_log_file,
                       config.link_val_log_file) """
-        segmentor.run(saved_model_path, "model_495.pth", config.val_log_file,
+        segmentor.run(saved_model_path, "model_415.pth", config.val_log_file,
                       config.link_val_log_file)
