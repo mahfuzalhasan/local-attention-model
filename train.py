@@ -117,17 +117,14 @@ with Engine(custom_parser=parser) as engine:
     if config.resume_train:
         print('Loading model to resume train')
         state_dict = torch.load(config.resume_model_path)
-        model = model.load_state_dict(state_dict['model'])
+        model.load_state_dict(state_dict['model'])
         optimizer.load_state_dict(state_dict['optimizer'])
         starting_epoch = state_dict['epoch']
-
-        print('model loading done')
-
-
+        print('resuming training with model: ', config.resume_model_path)
 
     optimizer.zero_grad()
     model.train()
-    logger.info('begin trainning:')
+    logger.info('begin training:')
     
     # total epoch
     # for epoch in range(engine.state.epoch, config.nepochs+1):
