@@ -1,210 +1,74 @@
 import torch
+
+# Assuming you have tensors M and N with sizes BxCx120x160
+B = 8
+C = 32
+M = torch.randn(B, C, 120, 160)
+N = torch.randn(B, C, 120, 160)
+
+
+import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
-class PatchMerging(nn.Module):
-    def __init__(self, in_channels, out_channels, downscaling_factor):
-        super().__init__()
-        self.downscaling_factor = downscaling_factor
-        self.patch_merge = nn.Unfold(kernel_size=downscaling_factor, stride=downscaling_factor, padding=0)
-        self.linear = nn.Linear(in_channels * downscaling_factor ** 2, out_channels)
+# Assuming you have tensors M and N with sizes BxCx120x160
 
-    def forward(self, x):
-        b, c, h, w = x.shape
-        new_h, new_w = h // self.downscaling_factor, w // self.downscaling_factor
-        x = self.patch_merge(x)
-        #print("x1: ",x.shape)
-        x = x.view(b, -1, new_h, new_w)
-        #print("view: ",x.size())
-        x = x.permute(0, 2, 3, 1)
-        #print("p: ",x.size())
-        
-        x = self.linear(x)
+# Size of patches in M
+patch_size_m = 4
 
-        return x
+# Size of patches in N
+patch_size_n = 8
 
-import numpy as np
+# Calculate the number of patches in each dimension for M and N
+num_patches_m = (M.size(2) // patch_size_m, M.size(3) // patch_size_m)
+num_patches_n = (N.size(2) // patch_size_n, N.size(3) // patch_size_n)
 
-# Create a 12x12 array
-
-def patchify(arr, patch_size):
-    patches = arr.reshape(arr.shape[0], arr.shape[1] // patch_size, patch_size, arr.shape[2] // patch_size, patch_size)
-    #print('patches shape: ',patches.shape)
-    patches = patches.swapaxes(2, 3)
-    #print('patches shape after swap axes: ',patches.shape)
-    patches = patches.reshape(arr.shape[0], -1, patch_size, patch_size)
-    #print('patches reshape: ',patches.shape)
-    return patches
-
-def patchify_torch(arr, patch_size):
-    # arr = torch.from_numpy(arr)
-    # Reshape the tensor into patches
-    patches = arr.view(arr.shape[0], arr.shape[1] // patch_size, patch_size, arr.shape[2] // patch_size, patch_size)
-    patches = patches.permute(0, 1, 3, 2, 4).contiguous()
-    patches = patches.view(arr.shape[0], -1, patch_size, patch_size)
-    return patches
-
-
-
-if __name__=="__main__":
-    # x = torch.randn(2, 3, 8, 8)
-    # patchMerging = PatchMerging(3, 24, 2)
-    # y = patchMerging(x)
-    # #print(y.shape)
-
-    # q = torch.randn(8, 38400, 16)
-    # k = torch.randn(8, 38400, 16)
-
-    # attn = q @ k.transpose(-2, -1)
-    # #print(atten)
-    B = 1
-    H = 24
-    W = 24
-
-    patch_size = 4
-    # #print("###########numpy operations###########")
-    # Q = np.ones((B, H, W))
-    # Q[:, 0, 0] = 2
-    # Q[:, 1, 0] = 0
-    # Q[:, 1, 1] = -1
-
-    # Q[:, 0, 2] = 1
-    # Q[:, 0, 3] = -5
-    # Q[:, 1, 2] = 0
-
-    # Q[:, 0, 4] = 0
-    # Q[:, 0, 5] = 1
-    # Q[:, 1, 4] = -1
-    # Q[:, 1, 5] = 0
-    # Q[:, 5, :] = 0
-    # print('Q')
-    # print(Q)
-    # Q_p = patchify(Q, patch_size)
-    # #print("Q patch:")
-    # #print(Q_p)
-    # Q_s = Q_p.reshape(1, 3, 3, 2, 2)
-    # Q_s = Q_s.swapaxes(2, 3)
-    # #print('Q_s: ',Q_s.shape)
-    # Q_r = Q_s.reshape(Q.shape[0], H, W)
-    # #print("Q_r: ",Q_r.shape)
-    # #print(Q_r)
-
-    # K = np.zeros((B, H, W))
-    # K[:, 0, 0] = 2
-    # K[:, 1, 0] = 2
-    # K[:, 1, 1] = 4
-
-    # K[:, 0, 2] = 3
-    # K[:, 0, 3] = 2
-    # K[:, 1, 2] = 1
-
-    # K[:, 0, 4] = -1
-    # K[:, 0, 5] = -2
-    # K[:, 1, 4] = 9
-    # K[:, 1, 5] = 4
-    # print('K')
-    # print(K)
-    # QK = Q @ K
-    # #print('QK')
-    # #print(QK)
-    # mat_QK = np.matmul(Q, K)
-    # torch_Q = torch.from_numpy(Q)
-    # torch_K = torch.from_numpy(K)
-    
-
-    # # K = K.transpose(0, 2, 1)
-    # # #print('Transpose')
-    # # #print(K)
-    
-    # K_p = patchify(K, patch_size)
-    # #print("K patch:",K_p.shape)
-    # #print(K_p)
-    # K_s = K_p.reshape(1, 3, 3, 2, 2)
-    
-    # K_s = K_s.swapaxes(2, 3)
-    # #print('K_s: ',K_s.shape)
-    # K_r = K_s.reshape(K.shape[0], H, W)
-    # #print("K_r: ",K_r.shape)
-    # #print(K_r)
-    # K_p = np.transpose(K_p, (0, 1, 3, 2))
-    # mul = Q_p @ K_p
-    # print("mul")
-    # print(mul, mul.shape)
-    # mul_s = mul.reshape(1, 3, 3, 2, 2)
-    # mul_s = mul_s.swapaxes(2, 3)
-    # #print('mul_s: ',mul_s.shape)
-    # mul_r = mul_s.reshape(mul.shape[0], H, W)
-    # #print('mul reshape')
-    # #print(mul_r, mul_r.shape)
-    # #print("####################################")
-
-    #print("###########pyTorch operations###########")
-    Q = torch.randn((B, H, W))
-    # Q[:, 0, 0] = 2
-    # Q[:, 1, 0] = 0
-    # Q[:, 1, 1] = -1
-
-    # Q[:, 0, 2] = 1
-    # Q[:, 0, 3] = -5
-    # Q[:, 1, 2] = 0
-
-    # Q[:, 0, 4] = 0
-    # Q[:, 0, 5] = 1
-    # Q[:, 1, 4] = -1
-    # Q[:, 1, 5] = 0
-    # Q[:, 5, :] = 0
-    # #print('Q')
-    # #print(Q)
-    Q_p = patchify_torch(Q, patch_size)
-    # #print("Q patch:")
-    # #print(Q_p)
-
-    K = torch.randn((B, H, W))
-    # K[:, 0, 0] = 2
-    # K[:, 1, 0] = 2
-    # K[:, 1, 1] = 4
-
-    # K[:, 0, 2] = 3
-    # K[:, 0, 3] = 2
-    # K[:, 1, 2] = 1
-
-    # K[:, 0, 4] = -1
-    # K[:, 0, 5] = -2
-    # K[:, 1, 4] = 9
-    # K[:, 1, 5] = 4
-    # #print('K')
-    # #print(K)
-
-    K_p = patchify_torch(K, patch_size)
-    # #print("K patch:")
-    # #print(K_p)
-
-    mul = Q_p @ K_p.transpose(-2, -1)
-
-    print('mul')
-    print(mul)
-    # mul_s = mul.view(1, 3, 3, 2, 2)
-    # mul_s = mul_s.permute(0, 1, 3, 2, 4)
-    # #print('mul_s: ',mul_s.shape)
-    # mul_r = mul_s.reshape(mul.shape[0], H, W)
-    # #print('mul reshape')
-    # #print(mul_r, mul_r.shape)
-
-    mul = mul.softmax(dim=-1)      #  couldn't figure out yet
-    print('mul Soft')
-    print(mul)
-    # attn = self.attn_drop(attn)
-    mul_s = mul.view(1, 3, 3, 2, 2)
-    mul_s = mul_s.permute(0, 1, 3, 2, 4)
-    #print('mul_s: ',mul_s.shape)
-    mul_r = mul_s.reshape(mul.shape[0], H, W)
-    #print('mul reshape')
-    #print(mul_r, mul_r.shape)
-    #print("####################################")
-    
-    summation = torch.sum(mul_r)
+# Extract patches from M with size B x C x num_patches_m[0] x patch_size_m x num_patches_m[1] x patch_size_m
+M_patches = M.unfold(2, patch_size_m, patch_size_m).unfold(3, patch_size_m, patch_size_m)
 
 
 
 
+# Extract patches from N with size B x C x num_patches_n[0] x patch_size_n x num_patches_n[1] x patch_size_n
+N_patches = N.unfold(2, patch_size_n, patch_size_n).unfold(3, patch_size_n, patch_size_n)
+print(f'patches M:{M_patches.shape} N:{N_patches.shape}')
 
+patch_conv = nn.Conv2d(32, 32, 4, stride=4, padding=0)
 
+M = patch_conv(M)
+M = F.adaptive_avg_pool2d(M, (N_patches.shape[2], N_patches.shape[3]))
+print(f' M:{M.shape}')
+
+import torch
+
+# Assuming M and N are your tensors of size BxCx120x160
+# and BxCx120x160 respectively
+
+# Patch sizes
+M_patch_size = 4
+N_patch_size = 8
+
+# Reshape M and N into patches
+M_patches = M.unfold(2, M_patch_size, M_patch_size).unfold(3, M_patch_size, M_patch_size)
+N_patches = N.unfold(2, N_patch_size, N_patch_size).unfold(3, N_patch_size, N_patch_size)
+
+# Get the shapes of M_patches and N_patches
+B, C, M_patches_H, M_patches_W, _, _ = M_patches.shape
+_, _, N_patches_H, N_patches_W, _, _ = N_patches.shape
+
+# Expand the dimensions of M_patches to match the dimensions of N_patches for broadcasting
+M_patches = M_patches.unsqueeze(4).unsqueeze(5)
+M_patches = M_patches.expand(-1, -1, -1, -1, N_patches_H, N_patches_W, -1, -1)
+
+# Expand the dimensions of N_patches to match the dimensions of M_patches for broadcasting
+N_patches = N_patches.unsqueeze(2).unsqueeze(3)
+N_patches = N_patches.expand(-1, -1, M_patches_H, M_patches_W, -1, -1, -1, -1)
+print(M_patches.shape, N_patches.shape)
+# Element-wise multiplication
+result = M_patches * N_patches
+
+# Reshape the result tensor back to BxCx120x160
+result = result.contiguous().view(B, C, M_patches_H * N_patches_H, M_patches_W * N_patches_W)
+
+# At this point, 'result' will contain the element-wise multiplication of each 4x4 patch of M
+# with all 4x4 patches from the corresponding 8x8 patch of N.
