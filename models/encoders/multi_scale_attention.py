@@ -8,6 +8,8 @@ from fusion import iAFF
 import math
 import time
 
+
+
 class MultiScaleAttention(nn.Module):
     def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0., sr_ratio=1, local_region_shape = [4, 8, 40]):
         super().__init__()
@@ -55,19 +57,22 @@ class MultiScaleAttention(nn.Module):
     # create overlapping patches
     def patchify(self, arr, H, W, patch_size, overlap = False):
         if not overlap:
-            ##print('arr: ',arr.shape)
+            B = arr.shape[0]
+            Ch = arr.shape[-1]
+            print('arr: ',arr.shape)
             arr = arr.view(arr.shape[0], arr.shape[1], H, W, arr.shape[3])
             ##print('arr view: ',arr.shape)
             patches = arr.view(arr.shape[0], arr.shape[1], arr.shape[2] // patch_size, patch_size, arr.shape[3] // patch_size, patch_size, arr.shape[4])
             ##print('patches: ',patches.shape)
             #B x num_head x H//ps x ps x W//ps x ps x C
-            # #####print('patches shape: ', patches.shape)
+            print('patches shape: ', patches.shape)
             patches = patches.permute(0, 1, 2, 4, 3, 5, 6).contiguous()
             # B x num_head x C x H//ps x W//ps x ps x ps
-            ##print('patches permute: ', patches.shape)
+            print('patches permute: ', patches.shape)
             patches = patches.view(patches.shape[0], patches.shape[1], patches.shape[2], patches.shape[3], -1, patches.shape[6])
-            ##print('patches reshape: ', patches.shape)
-            #exit()
+            print('patches reshape: ', patches.shape)
+            patches = patches.reshape(B, self.num_heads, -1, patch_size*patch_size, Ch)
+            print('patches final: ', patches.shape)
             return patches
         else:
             stride = patch_size//2
@@ -80,21 +85,19 @@ class MultiScaleAttention(nn.Module):
             #exit()
             return patches
 
-
     def attention(self, q, k, v):
         ######print(self.scale)
-        ##print('q: ',q.size())
-        ##print('k: ',k.size())
-        ##print('v: ',v.size())
+        print('q: ',q.size())
+        print('k: ',k.size())
+        print('v: ',v.size())
         attn = (q @ k.transpose(-2, -1)) * self.scale   # scaling needs to be fixed
         # #####print('attn: ', attn.shape)   
         attn = attn.softmax(dim=-1)      #  couldn't figure out yet
         attn = self.attn_drop(attn)
         # attn = attn.view(attn.shape[0], attn.shape[1], -1, attn.shape[4])
-        ##print('attn after reshape: ',attn.shape) 
+        print('attn after reshape: ',attn.shape) 
         x = (attn @ v)
         return x
-
 
     def fuse_ms_attn_map(self, A, H, W):
         B, N, C = A[0].shape
@@ -111,9 +114,7 @@ class MultiScaleAttention(nn.Module):
         ####print('!!!!!!!!!!!!attention head: ',self.num_heads, ' !!!!!!!!!!')
         A = []
         B, N, C = x.shape
-        q = self.q(x).reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3) 
-        
-
+        q = self.q(x).reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
         # This reduces dimension of k and v
         # 120, 160 --Flatten--> 19200--FNN--> 300
         if self.sr_ratio > 1:       
@@ -123,10 +124,11 @@ class MultiScaleAttention(nn.Module):
             kv = self.kv(x_).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4) 
         else:
             kv = self.kv(x).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4) 
+
         k_full, v_full = kv[0], kv[1]
-        ###print(f'global q:{q.shape} k:{k_full.shape} v:{v_full.shape}')
+        print(f'global q:{q.shape} k:{k_full.shape} v:{v_full.shape}')
         a_1 = self.attention(q, k_full, v_full)
-        ###print(f'full scale attn:{a_1.shape}')
+        print(f'full scale attn:{a_1.shape}')
         a_1 = a_1.transpose(1, 2)
         a_1 = a_1.reshape(B, N, C)
         a_1 = self.proj(a_1)
@@ -136,20 +138,22 @@ class MultiScaleAttention(nn.Module):
 
         kv = self.kv(x).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         k, v = kv[0], kv[1]
-        ###print(f'new k:{k.shape} new v:{v.shape} q:{q.shape}')
+        print(f'new k:{k.shape} new v:{v.shape} q:{q.shape}')
         for rg_shp in self.local_region_shape:
+            print(f'local region shape:{rg_shp}')
             q_patch = self.patchify(q, H, W, rg_shp)
             k_patch = self.patchify(k, H, W, rg_shp)
             v_patch = self.patchify(v, H, W, rg_shp)
             #print(f'patchified q:{q_patch.shape}, k:{k_patch.shape}, v:{v_patch.shape}')
             patched_attn = self.attention(q_patch, k_patch, v_patch)
-            #print('patched attention output: ',patched_attn.shape)
+            patched_attn = patched_attn.reshape(B, self.num_heads, H//rg_shp, W//rg_shp, rg_shp*rg_shp, C//self.num_heads )
+            print('patched attention output: ',patched_attn.shape)
             #exit()
             patched_attn = patched_attn.permute(0, 1, 5, 2, 3, 4).contiguous()
             #patched_attn = patched_attn.view(0, 1, 5, 2, 3, 4)
-            #print('patched attention permute: ',patched_attn.shape)
+            print('patched attention permute: ',patched_attn.shape)
             a_1 = patched_attn.view(patched_attn.shape[0], -1, patched_attn.shape[3], patched_attn.shape[4], rg_shp, rg_shp)
-            #print('patched attention reshape: ',a_1.shape)
+            print('patched attention reshape: ',a_1.shape)
             a_1 = a_1.permute(0, 1, 2, 4, 3, 5).contiguous().reshape(B, C, N)
             #a_1 = a_1.reshape(B, C, N)
             #exit()
@@ -157,12 +161,13 @@ class MultiScaleAttention(nn.Module):
             ###print('local attn: ',a_1.shape)
             a_1 = a_1.transpose(1, 2)
             #a_1 = a_1.reshape(B, N, C)
-            ###print('local attn reshape: ',a_1.shape)
+            print('local attn reshape: ',a_1.shape)
             a_1 = self.proj(a_1)
             a_1 = self.proj_drop(a_1)
-            ##print('local attn final: ',a_1.shape)
+            print('local attn final: ',a_1.shape)
             #exit()
             A.append(a_1)
+            exit()
 
         #print('$$$$multi attention shapes$$$$')
         # for attn_o in A:

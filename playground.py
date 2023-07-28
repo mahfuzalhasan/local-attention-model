@@ -1,74 +1,92 @@
 import torch
-
-# Assuming you have tensors M and N with sizes BxCx120x160
-B = 8
-C = 32
-M = torch.randn(B, C, 120, 160)
-N = torch.randn(B, C, 120, 160)
-
-
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-# Assuming you have tensors M and N with sizes BxCx120x160
-
-# Size of patches in M
-patch_size_m = 4
-
-# Size of patches in N
-patch_size_n = 8
-
-# Calculate the number of patches in each dimension for M and N
-num_patches_m = (M.size(2) // patch_size_m, M.size(3) // patch_size_m)
-num_patches_n = (N.size(2) // patch_size_n, N.size(3) // patch_size_n)
-
-# Extract patches from M with size B x C x num_patches_m[0] x patch_size_m x num_patches_m[1] x patch_size_m
-M_patches = M.unfold(2, patch_size_m, patch_size_m).unfold(3, patch_size_m, patch_size_m)
 
 
+B = 8
+C = 32
+H = 120
+W = 160
 
+M = torch.randn(B, C, H, W)
+N = torch.randn(B, C, H, W)
 
-# Extract patches from N with size B x C x num_patches_n[0] x patch_size_n x num_patches_n[1] x patch_size_n
-N_patches = N.unfold(2, patch_size_n, patch_size_n).unfold(3, patch_size_n, patch_size_n)
-print(f'patches M:{M_patches.shape} N:{N_patches.shape}')
+class SelfAttention(nn.Module):
+    def __init__(self, input_dim, num_heads):
+        super(SelfAttention, self).__init__()
+        self.num_heads = num_heads
+        self.head_dim = input_dim // num_heads
 
-patch_conv = nn.Conv2d(32, 32, 4, stride=4, padding=0)
+        self.query = nn.Linear(input_dim, input_dim)
+        self.key = nn.Linear(input_dim, input_dim)
+        self.value = nn.Linear(input_dim, input_dim)
 
-M = patch_conv(M)
-M = F.adaptive_avg_pool2d(M, (N_patches.shape[2], N_patches.shape[3]))
-print(f' M:{M.shape}')
+    def forward(self, x):
+        B, C, H, W = x.shape
+        q = self.query(x).view(B, self.num_heads, self.head_dim, -1).permute(0, 1, 3, 2)  # Bx(num_heads)x(H*W)xhead_dim
+        k = self.key(x).view(B, self.num_heads, self.head_dim, -1)  # Bx(num_heads)xhead_dimx(H*W)
+        v = self.value(x).view(B, self.num_heads, self.head_dim, -1)  # Bx(num_heads)xhead_dimx(H*W)
 
-import torch
+        energy = torch.matmul(q, k)  # Bx(num_heads)x(H*W)x(H*W)
+        attention = F.softmax(energy, dim=-1)  # Bx(num_heads)x(H*W)x(H*W)
+
+        out = torch.matmul(v, attention).permute(0, 2, 1, 3).contiguous()  # Bxhead_dimx(num_heads)x(H*W)
+        out = out.view(B, C, H, W)  # BxCxHxW
+        return out
+
+class CrossAttention(nn.Module):
+    def __init__(self, input_dim, num_heads):
+        super(CrossAttention, self).__init__()
+        self.num_heads = num_heads
+        self.head_dim = input_dim // num_heads
+
+        self.query = nn.Linear(input_dim, input_dim)
+        self.key = nn.Linear(input_dim, input_dim)
+        self.value = nn.Linear(input_dim, input_dim)
+
+    def forward(self, x1, x2):
+        B, C, _, H1, W1 = x1.shape
+        _, _, _, H2, W2 = x2.shape
+
+        q = self.query(x1).view(B, C, self.num_heads, self.head_dim, -1).permute(0, 2, 4, 3, 1)  # Bx(num_heads)x(H1*W1)xhead_dimxC
+        k = self.key(x2).view(B, C, self.num_heads, self.head_dim, -1)  # Bx(num_heads)xhead_dimxCx(H2*W2)
+        v = self.value(x2).view(B, C, self.num_heads, self.head_dim, -1)  # Bx(num_heads)xhead_dimxCx(H2*W2)
+
+        energy = torch.matmul(q, k)  # Bx(num_heads)x(H1*W1)x(H2*W2)
+        attention = F.softmax(energy, dim=-1)  # Bx(num_heads)x(H1*W1)x(H2*W2)
+
+        out = torch.matmul(v, attention).permute(0, 2, 4, 3, 1).contiguous()  # Bxhead_dimxCx(num_heads)x(H2*W2)
+        out = out.view(B, C, H1, W1)  # BxCxH1xW1
+        return out
 
 # Assuming M and N are your tensors of size BxCx120x160
-# and BxCx120x160 respectively
+B, C, H, W = M.shape
 
 # Patch sizes
 M_patch_size = 4
 N_patch_size = 8
 
-# Reshape M and N into patches
+# Extract patches
 M_patches = M.unfold(2, M_patch_size, M_patch_size).unfold(3, M_patch_size, M_patch_size)
 N_patches = N.unfold(2, N_patch_size, N_patch_size).unfold(3, N_patch_size, N_patch_size)
 
-# Get the shapes of M_patches and N_patches
-B, C, M_patches_H, M_patches_W, _, _ = M_patches.shape
-_, _, N_patches_H, N_patches_W, _, _ = N_patches.shape
+# Initialize attention modules
+self_attention = SelfAttention(C, num_heads=8)
+cross_attention = CrossAttention(C, num_heads=8)
 
-# Expand the dimensions of M_patches to match the dimensions of N_patches for broadcasting
-M_patches = M_patches.unsqueeze(4).unsqueeze(5)
-M_patches = M_patches.expand(-1, -1, -1, -1, N_patches_H, N_patches_W, -1, -1)
+# Apply attention to M and N
+# M_self_attention = self_attention(M)
+# N_self_attention = self_attention(N)
+M_cross_attention = cross_attention(M_patches, N_patches)
+N_cross_attention = cross_attention(N_patches, M_patches)
 
-# Expand the dimensions of N_patches to match the dimensions of M_patches for broadcasting
-N_patches = N_patches.unsqueeze(2).unsqueeze(3)
-N_patches = N_patches.expand(-1, -1, M_patches_H, M_patches_W, -1, -1, -1, -1)
-print(M_patches.shape, N_patches.shape)
-# Element-wise multiplication
-result = M_patches * N_patches
+# Reshape the attention outputs back to their original sizes
+# M_self_attention = M_self_attention.contiguous().view(B, C, H, W)
+# N_self_attention = N_self_attention.contiguous().view(B, C, H, W)
+M_cross_attention = M_cross_attention.contiguous().view(B, C, H, W)
+N_cross_attention = N_cross_attention.contiguous().view(B, C, H, W)
 
-# Reshape the result tensor back to BxCx120x160
-result = result.contiguous().view(B, C, M_patches_H * N_patches_H, M_patches_W * N_patches_W)
-
-# At this point, 'result' will contain the element-wise multiplication of each 4x4 patch of M
-# with all 4x4 patches from the corresponding 8x8 patch of N.
+# # Combine attentions using element-wise addition or any other fusion method
+# combined_M = M + M_self_attention + M_cross_attention
+# combined_N = N + N_self_attention + N_cross_attention

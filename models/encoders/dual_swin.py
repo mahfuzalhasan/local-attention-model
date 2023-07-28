@@ -12,13 +12,23 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint
 import numpy as np
+import sys
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 
-from utils.load_utils import load_state_dict
+import os
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_dir)
+parent_dir = os.path.abspath(os.path.join(current_dir, os.pardir)) 
+sys.path.append(parent_dir)
+
+model_dir = os.path.abspath(os.path.join(parent_dir, os.pardir))
+sys.path.append(model_dir)
+
+from  utils.load_utils import load_state_dict
 from engine.logger import get_logger
 
-from ..net_utils import FeatureFusionModule as FFM
-from ..net_utils import FeatureRectifyModule as FRM
+from net_utils import FeatureFusionModule as FFM
+from net_utils import FeatureRectifyModule as FRM
 
 logger = get_logger()
 
@@ -127,10 +137,11 @@ class WindowAttention(nn.Module):
             x: input features with shape of (num_windows*B, N, C)
             mask: (0/-inf) mask with shape of (num_windows, Wh*Ww, Wh*Ww) or None
         """
+        print('inside window attention')
         B_, N, C = x.shape
         qkv = self.qkv(x).reshape(B_, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         q, k, v = qkv[0], qkv[1], qkv[2]  # make torchscript happy (cannot use tensor as tuple)
-
+        print(f'q k v: {q.shape}, {k.shape}, {v.shape}')
         q = q * self.scale
         attn = (q @ k.transpose(-2, -1))
 
@@ -206,6 +217,7 @@ class SwinTransformerBlock(nn.Module):
         B, L, C = x.shape
         H, W = self.H, self.W
         assert L == H * W, "input feature has wrong size"
+        print(f'attention input x: {x.shape}')
 
         shortcut = x
         x = self.norm1(x)
@@ -217,6 +229,7 @@ class SwinTransformerBlock(nn.Module):
         pad_b = (self.window_size - H % self.window_size) % self.window_size
         x = F.pad(x, (0, 0, pad_l, pad_r, pad_t, pad_b))
         _, Hp, Wp, _ = x.shape
+        print(f'attention input after padding x: {x.shape}')
 
         # cyclic shift
         if self.shift_size > 0:
@@ -228,13 +241,15 @@ class SwinTransformerBlock(nn.Module):
 
         # partition windows
         x_windows = window_partition(shifted_x, self.window_size)  # nW*B, window_size, window_size, C
+        print(f'x after windowing:{x_windows.shape}')
         x_windows = x_windows.view(-1, self.window_size * self.window_size, C)  # nW*B, window_size*window_size, C
-
+        print(f'x after windowing reshape:{x_windows.shape}')
         # W-MSA/SW-MSA
         attn_windows = self.attn(x_windows, mask=attn_mask)  # nW*B, window_size*window_size, C
-
+        print(f'attn_windows:{attn_windows.shape}')
         # merge windows
         attn_windows = attn_windows.view(-1, self.window_size, self.window_size, C)
+        print(f'attn_windows reshape:{attn_windows.shape}')
         shifted_x = window_reverse(attn_windows, self.window_size, Hp, Wp)  # B H' W' C
 
         # reverse cyclic shift
@@ -251,6 +266,8 @@ class SwinTransformerBlock(nn.Module):
         # FFN
         x = shortcut + self.drop_path(x)
         x = x + self.drop_path(self.mlp(self.norm2(x)))
+
+        exit()
 
         return x
 
@@ -624,10 +641,12 @@ class DualSwinTransformer(nn.Module):
 
     def forward(self, x, x_d):
         """Forward function."""
+        print(f'input:{x.shape}')
         x = self.patch_embed(x)
         x_d = self.patch_embed_d(x_d)
 
         Wh, Ww = x.size(2), x.size(3)
+        print(f'embedded x: {x.shape} window: {Wh}, {Ww} ')
         if self.ape:
             # interpolate the position embedding to the corresponding size
             absolute_pos_embed = F.interpolate(self.absolute_pos_embed, size=(Wh, Ww), mode='bicubic')
@@ -743,3 +762,16 @@ def load_dualpath_model(model, model_file, is_restore=False):
             t_ioend - t_start, t_end - t_ioend))
 
     return model
+
+if __name__=='__main__':
+    model = DualSwinTransformer()
+
+    # #######print(backbone)
+    B = 4
+    C = 3
+    H = 480
+    W = 640
+    device = 'cuda:0'
+    rgb = torch.randn(B, C, H, W)
+    x = torch.randn(B, C, H, W)
+    outputs = model(rgb, x)
