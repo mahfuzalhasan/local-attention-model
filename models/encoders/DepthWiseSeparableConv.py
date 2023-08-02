@@ -3,7 +3,7 @@ import torch.nn as nn
 class depthwise_separable_conv(nn.Module):
     def __init__(self, nin, nout, kernel_size = 5, padding = 2, dilation = 1, num_heads = 1, bias=False):
         super(depthwise_separable_conv, self).__init__()
-        padding = (kernel_size + (kernel_size-1)*(dilation-1) - 1)//2
+        # padding = (kernel_size + (kernel_size-1)*(dilation-1) - 1)//2
         self.depthwise = nn.Conv2d(nin, nin, kernel_size=kernel_size, dilation=dilation, padding=padding, groups=nin, bias=bias)
         self.pointwise = nn.Conv2d(nin, nout, kernel_size=1, bias=bias)
         self.num_heads = num_heads

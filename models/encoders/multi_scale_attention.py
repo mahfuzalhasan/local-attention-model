@@ -32,17 +32,17 @@ class MultiScaleAttention(nn.Module):
 
         self.query_projection_layers = nn.ModuleList([depthwise_separable_conv(self.dim, self.dim,  
                                         kernel_size=self.local_region_shape[0],
-                                        dilation = self.local_region_shape[i]//self.local_region_shape[0],
+                                        dilation = 1,
                                         num_heads = self.num_heads) 
                                         for i in range(len(self.local_region_shape))])
         self.key_projection_layers = nn.ModuleList([depthwise_separable_conv(self.dim, self.dim,  
                                         kernel_size=self.local_region_shape[0],
-                                        dilation = self.local_region_shape[i]//self.local_region_shape[0],
+                                        dilation = 1,
                                         num_heads = self.num_heads) 
                                         for i in range(len(self.local_region_shape))])
         self.value_projection_layers = nn.ModuleList([depthwise_separable_conv(self.dim, self.dim,  
                                         kernel_size=self.local_region_shape[0],
-                                        dilation = self.local_region_shape[i]//self.local_region_shape[0],
+                                        dilation = 1,
                                         num_heads = self.num_heads) 
                                         for i in range(len(self.local_region_shape))])
 
