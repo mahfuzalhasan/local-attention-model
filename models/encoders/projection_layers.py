@@ -22,7 +22,7 @@ class ProjectionLayers(nn.Module):
         super(ProjectionLayers, self).__init__()
         if dilation > 1:
             padding = (kernel_size + (kernel_size-1)*(dilation-1) - 1)//2
-        print(f'dilation:{dilation} padding: {padding}')
+        # print(f'dilation:{dilation} padding: {padding}')
         self.projection = nn.Conv2d(nin, nout, kernel_size=kernel_size, dilation=dilation, padding=padding, bias=bias)
         self.num_heads = num_heads
 
