@@ -3,7 +3,7 @@ import torch.nn as nn
 
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 
-from DepthWiseSeparableConv import depthwise_separable_conv
+from projection_layers import depthwise_separable_conv, ProjectionLayers
 
 
 from fusion import iAFF
@@ -30,17 +30,17 @@ class MultiScaleAttention(nn.Module):
         self.proj_drop = nn.Dropout(proj_drop)
 
 
-        self.query_projection_layers = nn.ModuleList([depthwise_separable_conv(self.dim, self.dim,  
+        # self.query_projection_layers = nn.ModuleList([ProjectionLayers(self.dim, self.dim,  
+        #                                 kernel_size=self.local_region_shape[0],
+        #                                 dilation = 1,
+        #                                 num_heads = self.num_heads) 
+        #                                 for i in range(len(self.local_region_shape))])
+        self.key_projection_layers = nn.ModuleList([ProjectionLayers(self.dim, self.dim,  
                                         kernel_size=self.local_region_shape[0],
                                         dilation = 1,
                                         num_heads = self.num_heads) 
                                         for i in range(len(self.local_region_shape))])
-        self.key_projection_layers = nn.ModuleList([depthwise_separable_conv(self.dim, self.dim,  
-                                        kernel_size=self.local_region_shape[0],
-                                        dilation = 1,
-                                        num_heads = self.num_heads) 
-                                        for i in range(len(self.local_region_shape))])
-        self.value_projection_layers = nn.ModuleList([depthwise_separable_conv(self.dim, self.dim,  
+        self.value_projection_layers = nn.ModuleList([ProjectionLayers(self.dim, self.dim,  
                                         kernel_size=self.local_region_shape[0],
                                         dilation = 1,
                                         num_heads = self.num_heads) 
@@ -159,7 +159,7 @@ class MultiScaleAttention(nn.Module):
 
         kv = self.kv(x).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         k, v = kv[0], kv[1]
-        q_spatial = q.permute(0, 1, 3, 2).reshape(B, -1, N).reshape(B, C, H, W)
+        # q_spatial = q.permute(0, 1, 3, 2).reshape(B, -1, N).reshape(B, C, H, W)
         k_spatial = k.permute(0, 1, 3, 2).reshape(B, -1, N).reshape(B, C, H, W)
         v_spatial = v.permute(0, 1, 3, 2).reshape(B, -1, N).reshape(B, C, H, W)
         #print(f'new k:{k_spatial.shape} new v:{v_spatial.shape} q:{q_spatial.shape}')
@@ -170,14 +170,15 @@ class MultiScaleAttention(nn.Module):
         We need to check whether we want to transform q or not in this process"""
         for i,rg_shp in enumerate(self.local_region_shape):
             #print(f'local region shape:{rg_shp}')
-            q_local = self.query_projection_layers[i](q_spatial)
+            # q_local = self.query_projection_layers[i](q_spatial)
             k_local = self.key_projection_layers[i](k_spatial)
             v_local = self.value_projection_layers[i](v_spatial)
             #print('locals: ',q_local.shape, k_local.shape, v_local.shape)
-            q_patch = self.patchify(q_local, H, W, rg_shp)
+            q_patch = self.patchify(q, H, W, rg_shp)
             k_patch = self.patchify(k_local, H, W, rg_shp)
             v_patch = self.patchify(v_local, H, W, rg_shp)
-            ##print(f'patchified q:{q_patch.shape}, k:{k_patch.shape}, v:{v_patch.shape}')
+            # print(f'patchified q:{q_patch.shape}, k:{k_patch.shape}, v:{v_patch.shape}')
+            # print(f'orginal:q {q.shape}')
             patched_attn = self.attention(q_patch, k_patch, v_patch)
             patched_attn = patched_attn.reshape(B, self.num_heads, H//rg_shp, W//rg_shp, rg_shp*rg_shp, C//self.num_heads )
             # print('patched attention output: ',patched_attn.shape)
