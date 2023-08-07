@@ -3,7 +3,7 @@ import torch.nn as nn
 
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 
-from DepthWiseSeparableConv import depthwise_separable_conv
+from projection_layers import depthwise_separable_conv, ProjectionLayers
 
 
 from fusion import iAFF
@@ -35,14 +35,14 @@ class MultiScaleAttention(nn.Module):
         #                                 dilation = 1,
         #                                 num_heads = self.num_heads) 
         #                                 for i in range(len(self.local_region_shape))])
-        self.key_projection_layers = nn.ModuleList([depthwise_separable_conv(self.dim, self.dim,  
+        self.key_projection_layers = nn.ModuleList([ProjectionLayers(self.dim, self.dim,  
                                         kernel_size=self.local_region_shape[0],
-                                        dilation = 1,
+                                        dilation = self.local_region_shape[i]//self.local_region_shape[0],
                                         num_heads = self.num_heads) 
                                         for i in range(len(self.local_region_shape))])
-        self.value_projection_layers = nn.ModuleList([depthwise_separable_conv(self.dim, self.dim,  
+        self.value_projection_layers = nn.ModuleList([ProjectionLayers(self.dim, self.dim,  
                                         kernel_size=self.local_region_shape[0],
-                                        dilation = 1,
+                                        dilation = self.local_region_shape[i]//self.local_region_shape[0],
                                         num_heads = self.num_heads) 
                                         for i in range(len(self.local_region_shape))])
 
