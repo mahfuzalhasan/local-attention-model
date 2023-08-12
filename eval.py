@@ -113,8 +113,8 @@ if __name__ == "__main__":
     #exit()
     network = segmodel(cfg=config, criterion=None, norm_layer=nn.BatchNorm2d)
     print("multigpu training")
-    network = nn.DataParallel(network, device_ids = [0])
-    network.to(f'cuda:{network.device_ids[0]}', non_blocking=True)
+    network = nn.DataParallel(network, device_ids = config.device_ids)
+    network.to(f'cuda:{network.device_ids[0]}', non_blocking=True) # force model to first GPU. Later flow is managed by DataParallel
 
     data_setting = {'rgb_root': config.rgb_root_folder,
                     'rgb_format': config.rgb_format,
