@@ -277,12 +277,15 @@ class StokenAttentionLayer(nn.Module):
         
     def forward(self, x):
         x = self.pos_embed(x)
+        print(f'x after pos embed:{x.shape} layerscale:{self.layerscale}')
         if self.layerscale:
             x = x + self.drop_path(self.gamma_1 * self.attn(self.norm1(x)))
             x = x + self.drop_path(self.gamma_2 * self.mlp2(self.norm2(x))) 
         else:
             x = x + self.drop_path(self.attn(self.norm1(x)))
-            x = x + self.drop_path(self.mlp2(self.norm2(x)))        
+            print(f'x after attn:{x.shape}')
+            x = x + self.drop_path(self.mlp2(self.norm2(x)))  
+            print(f'x after mlp2:{x.shape}')      
         return x
 
 class BasicLayer(nn.Module):        
@@ -311,11 +314,12 @@ class BasicLayer(nn.Module):
             self.downsample = None
          
     def forward(self, x):
+        print(f'############# Blocks in the layer: {len(self.blocks)} ############## \n')
         for idx, blk in enumerate(self.blocks):
             if self.use_checkpoint and idx < self.checkpoint_num:
                 x = checkpoint.checkpoint(blk, x)
             else:
-                print(f'blk idx:{idx}')
+                print(f'$$$$$$$$$$$$$$$$$$ blk idx:{idx} $$$$$$$$$$$$$$ \n')
                 x = blk(x)
         if self.downsample is not None:
             x = self.downsample(x)
@@ -389,6 +393,7 @@ class STViT(nn.Module):
                 
         # build layers
         self.layers = nn.ModuleList()
+        
         for i_layer in range(self.num_layers):
             layer = BasicLayer(num_layers=depths[i_layer],
                                dim=[embed_dim[i_layer], embed_dim[i_layer+1] if i_layer<self.num_layers-1 else None],                              
@@ -440,9 +445,12 @@ class STViT(nn.Module):
 
         count=1
         for layer in self.layers:   
-            print(f'layer {count} def:{layer}')         
+            print(f'################# layer {count}############### \n')         
             x = layer(x)
-            exit()
+            count += 1
+            if count == 3:
+                exit()
+            # exit()
         
         x = self.proj(x)
         x = self.norm(x)
