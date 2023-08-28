@@ -1,0 +1,5 @@
+DATASET:
+  NAME: 'cityscapes'
+  ROOT: 'data/cityscapes/'
+  MODE: 'RGB' # RGBD, RGB, RGB_HHA
+  N_CLASSES: 19
