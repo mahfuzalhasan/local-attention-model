@@ -13,7 +13,7 @@ import torch.backends.cudnn as cudnn
 from torch.nn.parallel import DistributedDataParallel, DataParallel
 
 from config import config
-from dataloader.dataloader import get_train_loader
+from dataloader.nyudv2_dataloader import get_train_loader
 from models.builder import EncoderDecoder as segmodel
 from dataloader.RGBXDataset import RGBXDataset
 from utils.init_func import init_weight, group_weight

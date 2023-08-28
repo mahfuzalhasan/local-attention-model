@@ -15,7 +15,7 @@ from engine.logger import get_logger
 from utils.metric import hist_info, compute_score
 from dataloader.RGBXDataset import RGBXDataset
 from models.student_builder import EncoderDecoder as segmodel
-from dataloader.dataloader import ValPre
+from dataloader.nyudv2_dataloader import ValPre
 
 logger = get_logger()
 
