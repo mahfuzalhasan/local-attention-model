@@ -3,12 +3,31 @@ import torch.nn as nn
 import torch.nn.functional as F
 from functools import partial
 
+import os
+import sys
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_dir)
+parent_dir = os.path.abspath(os.path.join(current_dir, os.pardir)) 
+sys.path.append(parent_dir)
+
+model_dir = os.path.abspath(os.path.join(parent_dir, os.pardir))
+sys.path.append(model_dir)
+
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
-from ..net_utils import FeatureFusionModule as FFM
-from ..net_utils import FeatureRectifyModule as FRM
+from net_utils import FeatureFusionModule as FFM
+from net_utils import FeatureRectifyModule as FRM
+from decoders.MLPDecoder import DecoderHead
+
+
+
+
+
 import math
 import time
 from engine.logger import get_logger
+
+
+
 
 logger = get_logger()
 
@@ -230,6 +249,8 @@ class RGBXTransformer(nn.Module):
         super().__init__()
         self.num_classes = num_classes
         self.depths = depths
+        # self.channels = [64, 128, 320, 512]
+        # self.decoder_embed_dim = 512
 
         # patch_embed
         self.patch_embed1 = OverlapPatchEmbed(img_size=img_size, patch_size=7, stride=4, in_chans=in_chans,
@@ -331,6 +352,8 @@ class RGBXTransformer(nn.Module):
 
         self.apply(self._init_weights)
 
+        # self.head = DecoderHead(in_channels=self.channels, num_classes=self.num_classes, norm_layer=norm_layer, embed_dim=self.decoder_embed_dim)
+
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
             trunc_normal_(m.weight, std=.02)
@@ -405,6 +428,9 @@ class RGBXTransformer(nn.Module):
 
     def forward(self, x_rgb):
         out = self.forward_features(x_rgb)
+        # print('encoded: ',encoded.shape)
+        # out = self.head(encoded)
+        # print('out: ',out.shape)
         return out
 
 
@@ -419,21 +445,32 @@ def load_dualpath_model(model, model_file):
     else:
         raw_state_dict = model_file
     
-    state_dict = {}
-    for k, v in raw_state_dict.items():
-        if k.find('patch_embed') >= 0:
-            state_dict[k] = v
-            state_dict[k.replace('patch_embed', 'extra_patch_embed')] = v
-        elif k.find('block') >= 0:
-            state_dict[k] = v
-            state_dict[k.replace('block', 'extra_block')] = v
-        elif k.find('norm') >= 0:
-            state_dict[k] = v
-            state_dict[k.replace('norm', 'extra_norm')] = v
+    # state_dict = {}
+    # for k, v in raw_state_dict.items():
+    #     if k.find('patch_embed') >= 0:
+    #         state_dict[k] = v
+    #         # state_dict[k.replace('patch_embed', 'extra_patch_embed')] = v
+    #     elif k.find('block') >= 0:
+    #         state_dict[k] = v
+    #         # state_dict[k.replace('block', 'extra_block')] = v
+    #     elif k.find('norm') >= 0:
+    #         state_dict[k] = v
+    #         # state_dict[k.replace('norm', 'extra_norm')] = v
 
     t_ioend = time.time()
 
-    model.load_state_dict(state_dict, strict=False)
+    # for k, v in raw_state_dict.items():
+    #     if k == 'head.weight':
+    #         print(v.shape)
+    #     print(k)
+    # # exit()
+    # print("#############################################")
+    # for k, v in model.state_dict().items():
+    #     if 'head' in k:
+    #         print(v.shape) 
+    #     print(k)
+
+    model.load_state_dict(raw_state_dict, strict=False)
     del state_dict
     
     t_end = time.time()

@@ -15,10 +15,6 @@ import torch
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-
-# from dataloaders import custom_transforms as tr
-# import custom_transforms as tr
-# from dataloaders.SampleLoader import SampleLoader
 from dataloader.cityscapes_dataloader_utils.SampleLoader import SampleLoader
 
 class CityscapesDataset(data.Dataset):
@@ -231,23 +227,10 @@ def get_train_loader(engine, dataset):
     # from utils import decode_segmap, sample_distribution
     from config_cityscapes import config
     from torch.utils.data import DataLoader
-    # import matplotlib.pyplot as plt
-    # import argparse
-
-    # parser = argparse.ArgumentParser(description="Test cityscapes Loader")
-    # parser.add_argument('config_file', help='config file path')
-    # parser.add_argument(
-    #     "opts",
-    #     help="Modify config options using the command-line",
-    #     default=None,
-    #     nargs=argparse.REMAINDER,
-    # )
-
-    # args = parser.parse_args()
+    
 
     cfg = get_cfg_defaults()
-    # cfg.merge_from_file(args.config_file) # dataloader/cityscapes_rgbd_config.yaml
-    # cfg.merge_from_list(args.opts)
+   
 
     cfg.merge_from_file(config.dataset_config_path)
     cfg.freeze()
@@ -261,11 +244,11 @@ def get_train_loader(engine, dataset):
     is_shuffle = True
     batch_size = config.batch_size
     
-    if engine.distributed:  # False
-        print("distributed training: ",engine.distributed)
-        train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
-        batch_size = config.batch_size // engine.world_size
-        is_shuffle = False
+    # if engine.distributed:  # False
+    #     print("distributed training: ",engine.distributed)
+    #     train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
+    #     batch_size = config.batch_size // engine.world_size
+    #     is_shuffle = False
     
     train_loader = data.DataLoader(cityscapes_train, 
                                     batch_size=batch_size, 

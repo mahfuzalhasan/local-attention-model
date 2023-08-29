@@ -7,6 +7,7 @@ from tqdm import tqdm
 from datetime import datetime
 
 import torch
+from  torch.utils.data import DataLoader
 import torch.nn as nn
 import torch.distributed as dist
 import torch.backends.cudnn as cudnn
@@ -20,6 +21,7 @@ from dataloader.cityscapes_dataloader import get_train_loader
 from models.builder import EncoderDecoder as segmodel
 # from dataloader.RGBXDataset import RGBXDataset
 from dataloader.cityscapes_dataloader import CityscapesDataset
+from val_segformer_rgbonly import val_cityscape
 
 from utils.init_func import init_weight, group_weight
 from utils.lr_policy import WarmUpPolyLR
@@ -55,9 +57,15 @@ with Engine(custom_parser=parser) as engine:
     if torch.cuda.is_available():
         torch.cuda.manual_seed(seed)
 
-    train_loader, train_sampler = get_train_loader(engine, CityscapesDataset) 
+    # train_loader, train_sampler = get_train_loader(engine, CityscapesDataset) 
     # print('train dataloader size: ',len(train_loader))
 
+
+    cityscapes_train = CityscapesDataset(config, split='train')
+    train_loader = DataLoader(cityscapes_train, batch_size=8, shuffle=True, num_workers=4)
+
+    cityscapes_val = CityscapesDataset(config, split='val')
+    val_loader = DataLoader(cityscapes_val, batch_size=8, shuffle=False, num_workers=4)
 
     # if (engine.distributed and (engine.local_rank == 0)) or (not engine.distributed):
     #     tb_dir = config.tb_dir + '/{}'.format(time.strftime("%b%d_%d-%H-%M", time.localtime()))
@@ -83,8 +91,9 @@ with Engine(custom_parser=parser) as engine:
     # Loading model from Segformer's starting point (load model pretrained on ImageNet)   
     load_model_from = osp.join(config.pretrained_model)
     state_dict = torch.load(load_model_from)
-    model.load_state_dict(state_dict, strict=False)
+    model.load_state_dict(state_dict, strict=True)
     print('Loaded model from state_dict')
+    # exit()
     
     
     # group weight and config optimizer
@@ -123,11 +132,7 @@ with Engine(custom_parser=parser) as engine:
         # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         # model.to(device)
 
-    # engine.register_state(dataloader=train_loader, model=model,
-    #                       optimizer=optimizer)
-    # if engine.continue_state_object:
-    #     engine.restore_checkpoint()
-
+  
     starting_epoch = 1
     if config.resume_train:
         print('Loading model to resume train')
@@ -137,46 +142,26 @@ with Engine(custom_parser=parser) as engine:
         starting_epoch = state_dict['epoch']
         print('resuming training with model: ', config.resume_model_path)
 
-    optimizer.zero_grad()
+   
 
-    model.train()
     logger.info('begin training:')
     
     # total epoch
     # for epoch in range(engine.state.epoch, config.nepochs+1):
     for epoch in range(starting_epoch, config.nepochs):
-        if engine.distributed:
-            train_sampler.set_epoch(epoch)
-        bar_format = '{desc}[{elapsed}<{remaining},{rate_fmt}]'
-        pbar = tqdm(range(config.niters_per_epoch), file=sys.stdout,
-                    bar_format=bar_format)
-        # how manyiteration in ine epoch
-        dataloader = iter(train_loader)
+        model.train()
+        optimizer.zero_grad()
+        for idx, sample in enumerate(train_loader):
 
-        sum_loss = 0
-
-        for idx in pbar:
-            engine.update_iteration(epoch, idx)
-            minibatch = next(dataloader) #minibatch = dataloader.next()
-            imgs = minibatch['image']
-            gts = minibatch['label']
-            # modal_xs = minibatch['modal_x']
-
-
-            # imgs = imgs.cuda(non_blocking=True)
-            # gts = gts.cuda(non_blocking=True)
-            # modal_xs = modal_xs.cuda(non_blocking=True)
-
+            # engine.update_iteration(epoch, idx)
+            # minibatch = next(dataloader) #minibatch = dataloader.next()
+            imgs = sample['image']
+            gts = sample['label']
             imgs = imgs.to(f'cuda:{model.device_ids[0]}', non_blocking=True)
-            gts = gts.to(f'cuda:{model.device_ids[0]}', non_blocking=True) 
-            # modal_xs = modal_xs.to(f'cuda:{model.device_ids[0]}', non_blocking=True) 
+            gts = gts.to(f'cuda:{model.device_ids[0]}', non_blocking=True)  
 
             aux_rate = 0.2
-            # print('here')
-            # exit()
             loss = model(imgs, gts)
-            # loss = model(imgs, modal_xs, gts)
-            #print('loss size: ',loss.size())
 
             # mean over multi-gpu result
             loss = torch.mean(loss) 
@@ -184,51 +169,41 @@ with Engine(custom_parser=parser) as engine:
             # print("loss: ",loss)
 
             # reduce the whole loss over multi-gpu
-            if engine.distributed:
-                reduce_loss = all_reduce_tensor(loss, world_size=engine.world_size)
+            # if engine.distributed:
+            #     reduce_loss = all_reduce_tensor(loss, world_size=engine.world_size)
             
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
+            # Need to Change Lr Policy
             current_idx = (epoch- 1) * config.niters_per_epoch + idx 
             lr = lr_policy.get_lr(current_idx)
 
             for i in range(len(optimizer.param_groups)):
                 optimizer.param_groups[i]['lr'] = lr
 
-            if engine.distributed:
-                sum_loss += reduce_loss.item()
-                print_str = 'Epoch {}/{}'.format(epoch, config.nepochs) \
-                        + ' Iter {}/{}:'.format(idx + 1, config.niters_per_epoch) \
-                        + ' lr=%.4e' % lr \
-                        + ' loss=%.4f total_loss=%.4f' % (reduce_loss.item(), (sum_loss / (idx + 1)))
-            else:
-                sum_loss += loss
-                print_str = 'Epoch {}/{}'.format(epoch, config.nepochs) \
-                        + ' Iter {}/{}:'.format(idx + 1, config.niters_per_epoch) \
-                        + ' lr=%.4e' % lr \
-                        + ' loss=%.4f total_loss=%.4f' % (loss, (sum_loss / (idx + 1)))+'\n'
+           
+            sum_loss += loss
+            print_str = 'Epoch {}/{}'.format(epoch, config.nepochs) \
+                    + ' Iter {}/{}:'.format(idx + 1, config.niters_per_epoch) \
+                    + ' lr=%.4e' % lr \
+                    + ' loss=%.4f total_loss=%.4f' % (loss, (sum_loss / (idx + 1)))+'\n'
 
             del loss
             if idx % config.print_stats == 0:
                 #pbar.set_description(print_str, refresh=True)
                 print(f'{print_str}')
 
-        print(f"########## epoch:{epoch} train_loss:{sum_loss/len(pbar)}############")
-        writer.add_scalar('train_loss', sum_loss / len(pbar), epoch)
-        # if (engine.distributed and (engine.local_rank == 0)) or (not engine.distributed):
-        #     tb.add_scalar('train_loss', sum_loss / len(pbar), epoch)
+        print(f"########## epoch:{epoch} train_loss:{sum_loss/len(train_loader)}############")
+        writer.add_scalar('train_loss', sum_loss / len(train_loader), epoch)
+        writer.add_scalar('val_loss', val_loss, epoch)
+
+        ## Need to compute metrices for validation set
+        val_loss = val_cityscape(epoch, val_loader, model)
+        
 
         if (epoch >= config.checkpoint_start_epoch) and (epoch % config.checkpoint_step == 0) or (epoch == config.nepochs):
-            # if engine.distributed and (engine.local_rank == 0):
-            #     engine.save_and_link_checkpoint(config.checkpoint_dir,
-            #                                     config.log_dir,
-            #                                     config.log_dir_link)
-            # elif not engine.distributed:
-            #     engine.save_and_link_checkpoint(config.checkpoint_dir,
-            #                                     config.log_dir,
-            #                                     config.log_dir_link)
             save_dir = os.path.join(config.checkpoint_dir, str(run_id))
             if not os.path.exists(save_dir):
                 os.makedirs(save_dir)
@@ -239,3 +214,4 @@ with Engine(custom_parser=parser) as engine:
                 'optimizer': optimizer.state_dict()
             }
             torch.save(states, save_file_path)
+        
