@@ -91,30 +91,23 @@ class MultiScaleAttention(nn.Module):
 
 
     def attention(self, q, k, v):
-        ######print(self.scale)
-        ##print('q: ',q.size())
-        ##print('k: ',k.size())
-        ##print('v: ',v.size())
+        
         attn = (q @ k.transpose(-2, -1)) * self.scale   # scaling needs to be fixed
-        # #####print('attn: ', attn.shape)   
         attn = attn.softmax(dim=-1)      #  couldn't figure out yet
-        attn = self.attn_drop(attn)
-        # attn = attn.view(attn.shape[0], attn.shape[1], -1, attn.shape[4])
-        ##print('attn after reshape: ',attn.shape) 
+        attn = self.attn_drop(attn) 
         x = (attn @ v)
         return x
 
 
     def fuse_ms_attn_map(self, A, H, W):
+
         B, N, C = A[0].shape
         output_small_patched_attn = A[1].permute(0, 2, 1).contiguous().view(B, C, H, W)
         global_attn = A[0].permute(0, 2, 1).contiguous().view(B, C, H, W)
-        ##print('shapes: ', output.shape, global_attn.shape)
         for i in range(2,len(A)):
             idx = i - 2
             output_small_patched_attn = self.attn_fusion[idx](output_small_patched_attn, A[i].permute(0, 2, 1).contiguous().view(B, C, H, W))
         output = self.global_fusion(output_small_patched_attn, global_attn)
-        # print('final fused: ',output.shape)
         return output
 
     def forward(self, x, H, W):
