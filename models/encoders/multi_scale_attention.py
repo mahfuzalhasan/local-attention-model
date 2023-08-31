@@ -4,6 +4,7 @@ import torch.nn as nn
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 
 from projection_layers import depthwise_separable_conv, ProjectionLayers
+from stoken_attn_fusion import StokenAttention, StokenAttentionLayer
 
 
 from fusion import iAFF
@@ -51,7 +52,16 @@ class MultiScaleAttention(nn.Module):
             self.sr = nn.Conv2d(dim, dim, kernel_size=sr_ratio, stride=sr_ratio)
             self.norm = nn.LayerNorm(dim)
 
-        self.attn_fusion = iAFF(dim)
+        self.attn_fusion = []
+        for i in range(len(local_region_shape)-1):
+            sp_stoken_size = (local_region_shape[i], local_region_shape[i])
+            lp_stoken_size = (local_region_shape[i+1], local_region_shape[i+1])
+            self.attn_fusion.append(StokenAttentionLayer(dim, n_iter=1, 
+                            sp_stoken_size=sp_stoken_size, lp_stoken_size=lp_stoken_size))
+        self.attn_fusion = nn.ModuleList(self.attn_fusion)
+        self.global_fusion = iAFF(dim)
+
+        # self.attn_fusion = iAFF(dim)
         # self.final_proj = nn.Linear(dim * (len(self.local_region_shape)+1), dim)
         self.final_proj = nn.Linear(dim, dim)
         self.apply(self._init_weights)
@@ -118,18 +128,27 @@ class MultiScaleAttention(nn.Module):
         x = (attn @ v)
         return x
 
+    # def fuse_ms_attn_map(self, A, H, W):
+    #     B, N, C = A[0].shape
+    #     output = A[1].permute(0, 2, 1).contiguous().view(B, C, H, W)
+    #     global_attn = A[0].permute(0, 2, 1).contiguous().view(B, C, H, W)
+    #     ###print('shapes: ', output.shape, global_attn.shape)
+    #     for i in range(2,len(A)):
+    #         output = self.attn_fusion(output, A[i].permute(0, 2, 1).contiguous().view(B, C, H, W))
+    #     output = self.attn_fusion(output, global_attn)
+    #     ##print('final fused: ',output.shape)
+    #     return output
+
     def fuse_ms_attn_map(self, A, H, W):
+
         B, N, C = A[0].shape
-        output = A[1].permute(0, 2, 1).contiguous().view(B, C, H, W)
+        output_small_patched_attn = A[1].permute(0, 2, 1).contiguous().view(B, C, H, W)
         global_attn = A[0].permute(0, 2, 1).contiguous().view(B, C, H, W)
-        ###print('shapes: ', output.shape, global_attn.shape)
         for i in range(2,len(A)):
-            output = self.attn_fusion(output, A[i].permute(0, 2, 1).contiguous().view(B, C, H, W))
-        output = self.attn_fusion(output, global_attn)
-        ##print('final fused: ',output.shape)
+            idx = i - 2
+            output_small_patched_attn = self.attn_fusion[idx](output_small_patched_attn, A[i].permute(0, 2, 1).contiguous().view(B, C, H, W))
+        output = self.global_fusion(output_small_patched_attn, global_attn)
         return output
-
-
 
     def forward(self, x, H, W):
         #####print('!!!!!!!!!!!!attention head: ',self.num_heads, ' !!!!!!!!!!')
@@ -164,10 +183,6 @@ class MultiScaleAttention(nn.Module):
         v_spatial = v.permute(0, 1, 3, 2).reshape(B, -1, N).reshape(B, C, H, W)
         #print(f'new k:{k_spatial.shape} new v:{v_spatial.shape} q:{q_spatial.shape}')
         
-        """ instead of calculating local relationship from same q,k and v,
-        we project each of them into a new dimension before each regional
-        attention calculation.  
-        We need to check whether we want to transform q or not in this process"""
         for i,rg_shp in enumerate(self.local_region_shape):
             #print(f'local region shape:{rg_shp}')
             # q_local = self.query_projection_layers[i](q_spatial)
