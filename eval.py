@@ -19,6 +19,9 @@ from dataloader.dataloader import ValPre
 
 logger = get_logger()
 
+import torch.multiprocessing
+torch.multiprocessing.set_sharing_strategy('file_system')
+
 class SegEvaluator(Evaluator):
     def func_per_iteration(self, data, device):
         img = data['data']
@@ -87,7 +90,8 @@ if __name__ == "__main__":
     parser.add_argument('--save_path', '-p', default=None)
 
     args = parser.parse_args()
-    all_dev = parse_devices(args.devices)
+    # all_devices = parse_devices(config.device_ids)
+    all_devices = config.device_ids
 
 
     #data_dir = r'./data/nyudv2'
@@ -113,8 +117,8 @@ if __name__ == "__main__":
     #exit()
     network = segmodel(cfg=config, criterion=None, norm_layer=nn.BatchNorm2d)
     print("multigpu training")
-    network = nn.DataParallel(network, device_ids = config.device_ids)
-    network.to(f'cuda:{network.device_ids[0]}', non_blocking=True) # force model to first GPU. Later flow is managed by DataParallel
+    # network = nn.DataParallel(network, device_ids = config.device_ids)
+    # network.to(f'cuda:{network.device_ids[0]}', non_blocking=True) # force model to first GPU. Later flow is managed by DataParallel
 
     data_setting = {'rgb_root': config.rgb_root_folder,
                     'rgb_format': config.rgb_format,
@@ -135,10 +139,10 @@ if __name__ == "__main__":
         segmentor = SegEvaluator(dataset, config.num_classes, config.norm_mean,
                                  config.norm_std, network,
                                  config.eval_scale_array, config.eval_flip,
-                                 all_dev, args.verbose, args.save_path,
+                                 all_devices, args.verbose, args.save_path,
                                  args.show_image)
-        saved_model_path = os.path.join(config.checkpoint_dir, "07-14-23_1803")
+        saved_model_path = './pretrained' #os.path.join(config.checkpoint_dir, "07-14-23_1803")
         """ segmentor.run(config.checkpoint_dir, "NYUDV2_CMX+Segformer-B2.pth", config.val_log_file,
                       config.link_val_log_file) """
-        segmentor.run(saved_model_path, "model_415.pth", config.val_log_file,
+        segmentor.run(saved_model_path, "model_425.pth", config.val_log_file,
                       config.link_val_log_file)

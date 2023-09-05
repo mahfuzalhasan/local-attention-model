@@ -152,6 +152,8 @@ def load_restore_model(model, model_file):
 
     return model
 
+
+#### Need to load gpu saved model into CPU
 def load_model(model, model_file, is_restore=False):
     t_start = time.time()
 
@@ -173,6 +175,15 @@ def load_model(model, model_file, is_restore=False):
             state_dict = state_dict['module']
     else:
         state_dict = model_file
+    
+    ### Removing 'module' from weight keys to load into CPU first
+    new_state_dict = {}
+    for k, v in state_dict.items():
+        print("keys: ", k)
+        m_index = k.find('module.')
+        if m_index >= 0:
+            new_k = k[m_index+7:]
+            new_state_dict[new_k] = v
     t_ioend = time.time()
 
     if is_restore:
@@ -182,7 +193,11 @@ def load_model(model, model_file, is_restore=False):
             new_state_dict[name] = v
         state_dict = new_state_dict
 
-    model.load_state_dict(state_dict, strict=True)
+    
+    print("###########################################################")
+    model.load_state_dict(new_state_dict, strict=True)
+    print('############## model loading done #########################')
+    # exit()
     ckpt_keys = set(state_dict.keys())
     own_keys = set(model.state_dict().keys())
     missing_keys = own_keys - ckpt_keys
