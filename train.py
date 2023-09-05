@@ -216,9 +216,11 @@ with Engine(custom_parser=parser) as engine:
             if not os.path.exists(save_dir):
                 os.makedirs(save_dir)
             save_file_path = os.path.join(save_dir, 'model_{}.pth'.format(epoch))
+            ##### first send model to CPU and then save weight
             states = {
                 'epoch': epoch,
                 'model': model.state_dict(),
                 'optimizer': optimizer.state_dict()
             }
+
             torch.save(states, save_file_path)

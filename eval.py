@@ -21,8 +21,8 @@ logger = get_logger()
 
 class SegEvaluator(Evaluator):
     def func_per_iteration(self, data, device):
-        img = data['data']
-        label = data['label']
+        img = data['data']      # H, W, C
+        label = data['label']  
         modal_x = data['modal_x']
         name = data['fn']
         pred = self.sliding_eval_rgbX(img, modal_x, config.eval_crop_size, config.eval_stride_rate, device)
@@ -113,8 +113,11 @@ if __name__ == "__main__":
     #exit()
     network = segmodel(cfg=config, criterion=None, norm_layer=nn.BatchNorm2d)
     print("multigpu training")
-    network = nn.DataParallel(network, device_ids = [0])
-    network.to(f'cuda:{network.device_ids[0]}', non_blocking=True)
+    # network = nn.DataParallel(network, device_ids = [0])
+    # network.to(f'cuda:{network.device_ids[0]}', non_blocking=True) #wrap weights inside module
+
+    ### why we are sending model to device beforehand.
+        # to load pre-trained weight because pre-trained weights are from cuda devices
 
     data_setting = {'rgb_root': config.rgb_root_folder,
                     'rgb_format': config.rgb_format,

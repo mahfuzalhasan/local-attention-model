@@ -19,8 +19,9 @@ class Evaluator(object):
     def __init__(self, dataset, class_num, norm_mean, norm_std, network, multi_scales, 
                 is_flip, devices, verbose=False, save_path=None, show_image=False):
         self.eval_time = 0
-        self.dataset = dataset
-        self.ndata = self.dataset.get_length()
+        self.dataset = dataset      # not wrapped by DataLoader
+        ##### batch_size???? 
+        self.ndata = self.dataset.get_length()      # total test file length
         self.class_num = class_num
         self.norm_mean = norm_mean
         self.norm_std = norm_std
@@ -106,8 +107,9 @@ class Evaluator(object):
         all_results = []
         
         for idx in tqdm(range(self.ndata)):
-            dd = self.dataset[idx]
-            results_dict = self.func_per_iteration(dd,self.devices[0])
+            dd = self.dataset[idx]      # one data/image
+            ### called from children class --> SegEvaluator
+            results_dict = self.func_per_iteration(dd, self.devices[0])
             all_results.append(results_dict)
         print("all results single process: ",all_results)
         result_line = self.compute_metric(all_results)
@@ -122,17 +124,20 @@ class Evaluator(object):
         nr_devices = len(self.devices)
         stride = int(np.ceil(self.ndata / nr_devices))
 
+        ### data --> eqully distribute to devices
+        ###3 nr_devices = 2, stride = 1000/2 = 500
+
         # start multi-process on multi-gpu
         procs = []
         for d in range(nr_devices):
 
-            e_record = min((d + 1) * stride, self.ndata)
+            e_record = min((d + 1) * stride, self.ndata)    #500
             shred_list = list(range(d * stride, e_record))
             device = self.devices[d]
             logger.info('GPU %s handle %d data.' % (device, len(shred_list)))
 
             p = self.context.Process(target=self.worker,
-                                     args=(shred_list, device))
+                                     args=(shred_list, device)) # ([0-500], 0), ([500-1000], 1)    
             procs.append(p)
 
         for p in procs:
@@ -156,7 +161,7 @@ class Evaluator(object):
             'Evaluation Elapsed Time: %.2fs' % (
                     time.perf_counter() - start_eval_time))
         return result_line
-
+    # K threads will run this function in parallel using the passed arguments
     def worker(self, shred_list, device):
         start_load_time = time.time()
         logger.info('Load Model on Device %d: %.2fs' % (
@@ -313,53 +318,68 @@ class Evaluator(object):
         ori_rows, ori_cols, _ = img.shape
         processed_pred = np.zeros((ori_rows, ori_cols, self.class_num))
 
-        for s in self.multi_scales:
+        for s in self.multi_scales:     #[1]
+            ### img resize to scale
             img_scale = cv2.resize(img, None, fx=s, fy=s, interpolation=cv2.INTER_LINEAR)
-            if len(modal_x.shape) == 2:
+            if len(modal_x.shape) == 2:     #Depth Image
                 modal_x_scale = cv2.resize(modal_x, None, fx=s, fy=s, interpolation=cv2.INTER_NEAREST)
             else:
                 modal_x_scale = cv2.resize(modal_x, None, fx=s, fy=s, interpolation=cv2.INTER_LINEAR)
 
             new_rows, new_cols, _ = img_scale.shape
+            # H, W, C --> 480, 640, #num_class
+            # if scale 1.25 --> img_scale.shape = 600, 800, 3
             processed_pred += self.scale_process_rgbX(img_scale, modal_x_scale, (ori_rows, ori_cols),
                                                         crop_size, stride_rate, device)
 
-        pred = processed_pred.argmax(2)
-
+        # for per pixel select the class with maximum score
+        pred = processed_pred.argmax(2) # 480, 640, 1
         return pred
 
     def scale_process_rgbX(self, img, modal_x, ori_shape, crop_size, stride_rate, device=None):
-        new_rows, new_cols, c = img.shape
-        long_size = new_cols if new_cols > new_rows else new_rows
+        new_rows, new_cols, c = img.shape           #480, 640, 3
+        long_size = new_cols if new_cols > new_rows else new_rows   #640  #800
 
-        if new_cols <= crop_size[1] or new_rows <= crop_size[0]:
+        # new_rows = 600 # new_cols = 800    
+        if new_cols <= crop_size[1] or new_rows <= crop_size[0]:      
             input_data, input_modal_x, margin = self.process_image_rgbX(img, modal_x, crop_size)
+            ### input_data, input_modal_x ---> C, H, W
             score = self.val_func_process_rgbX(input_data, input_modal_x, device) 
+            #if scale < 1, then discard score for padded portions.
             score = score[:, margin[0]:(score.shape[1] - margin[1]), margin[2]:(score.shape[2] - margin[3])]
-        else:
+        
+        ### if scale = 1.25, image --> 600, 800, 3
+        else: 
+            # stride = 320, 427
             stride = (int(np.ceil(crop_size[0] * stride_rate)), int(np.ceil(crop_size[1] * stride_rate)))
+            # img_pad --> 600, 800, 3
             img_pad, margin = pad_image_to_shape(img, crop_size, cv2.BORDER_CONSTANT, value=0)
             modal_x_pad, margin = pad_image_to_shape(modal_x, crop_size, cv2.BORDER_CONSTANT, value=0)
 
-            pad_rows = img_pad.shape[0]
-            pad_cols = img_pad.shape[1]
-            r_grid = int(np.ceil((pad_rows - crop_size[0]) / stride[0])) + 1
-            c_grid = int(np.ceil((pad_cols - crop_size[1]) / stride[1])) + 1
+            pad_rows = img_pad.shape[0]     # 600
+            pad_cols = img_pad.shape[1]     # 800
+            r_grid = int(np.ceil((pad_rows - crop_size[0]) / stride[0])) + 1    #2
+            c_grid = int(np.ceil((pad_cols - crop_size[1]) / stride[1])) + 1    #2
             data_scale = torch.zeros(self.class_num, pad_rows, pad_cols).cuda(device)
+            
+            # data_scale --> 40, 600, 800
 
+
+            # stride = 320, 427
             for grid_yidx in range(r_grid):
                 for grid_xidx in range(c_grid):
-                    s_x = grid_xidx * stride[0]
-                    s_y = grid_yidx * stride[1]
-                    e_x = min(s_x + crop_size[0], pad_cols)
-                    e_y = min(s_y + crop_size[1], pad_rows)
-                    s_x = e_x - crop_size[0]
-                    s_y = e_y - crop_size[1]
+                    s_x = grid_xidx * stride[0] #0 320 
+                    s_y = grid_yidx * stride[1] # 0 
+                    e_x = min(s_x + crop_size[0], pad_cols) # min(480, 800) = 480 #min(800, 800) = 800
+                    e_y = min(s_y + crop_size[1], pad_rows) # min(640, 600) = 600
+                    s_x = e_x - crop_size[0]        # 0 320
+                    s_y = e_y - crop_size[1]        # -40
                     img_sub = img_pad[s_y:e_y, s_x: e_x, :]
                     if len(modal_x_pad.shape) == 2:
                         modal_x_sub = modal_x_pad[s_y:e_y, s_x: e_x]
                     else:
                         modal_x_sub = modal_x_pad[s_y:e_y, s_x: e_x,:]
+
 
                     input_data, input_modal_x, tmargin = self.process_image_rgbX(img_sub, modal_x_sub, crop_size)
                     temp_score = self.val_func_process_rgbX(input_data, input_modal_x, device)
@@ -371,36 +391,48 @@ class Evaluator(object):
             score = score[:, margin[0]:(score.shape[1] - margin[1]),
                     margin[2]:(score.shape[2] - margin[3])]
 
-        score = score.permute(1, 2, 0)
+        score = score.permute(1, 2, 0)      # H, W, C
         data_output = cv2.resize(score.cpu().numpy(), (ori_shape[1], ori_shape[0]), interpolation=cv2.INTER_LINEAR)
 
         return data_output
 
+    # multi-device problem exists here
+    # input_data --> 3 x 480 x 640
+    # input_modal_x --> 1 x 480 x 640
+
+    # device  = 0 
     def val_func_process_rgbX(self, input_data, input_modal_x, device=None):
+
         input_data = np.ascontiguousarray(input_data[None, :, :, :], dtype=np.float32)
-        input_data = torch.FloatTensor(input_data).cuda(device)
-    
+        input_data = torch.FloatTensor(input_data).cuda(device) # 1, C, H, W, 
+
         input_modal_x = np.ascontiguousarray(input_modal_x[None, :, :, :], dtype=np.float32)
-        input_modal_x = torch.FloatTensor(input_modal_x).cuda(device)
-    
+        input_modal_x = torch.FloatTensor(input_modal_x).cuda(device)   # 1, C, H, W
+
+        # self.val_func --> model
+        ## say model --> nn.DataParallel(device = [0, 1])
+        ### self.val_func --> device 1
         with torch.cuda.device(input_data.get_device()):
             self.val_func.eval()
+
+            # send model to device --> input device
             self.val_func.to(input_data.get_device())
             #print(f'device model:{self.val_func.get_device()} input_device:{input_data.get_device()}')
             with torch.no_grad():
-                score = self.val_func(input_data, input_modal_x)
-                score = score[0]
+                score = self.val_func(input_data, input_modal_x)    # 1, C, H, W
+                score = score[0]                # C, H, W
                 if self.is_flip:
                     input_data = input_data.flip(-1)
                     input_modal_x = input_modal_x.flip(-1)
                     score_flip = self.val_func(input_data, input_modal_x)
                     score_flip = score_flip[0]
                     score += score_flip.flip(-1)
-                score = torch.exp(score)
+                score = torch.exp(score)            # e^score
         
         return score
 
     # for rgbd segmentation
+    # when scaled image size <= crop_size (original size) condition
     def process_image_rgbX(self, img, modal_x, crop_size=None):
         p_img = img
         p_modal_x = modal_x
@@ -412,20 +444,21 @@ class Evaluator(object):
             p_img = np.concatenate((im_b, im_g, im_r), amodal_xis=2)
     
         p_img = normalize(p_img, self.norm_mean, self.norm_std)
+        #### modal_x --> if GraySclae then normalize with 0 mean and unit variance 
         if len(modal_x.shape) == 2:
             p_modal_x = normalize(p_modal_x, 0, 1)
         else:
             p_modal_x = normalize(p_modal_x, self.norm_mean, self.norm_std)
     
-        if crop_size is not None:
+        if crop_size is not None:       # 480, 640
             p_img, margin = pad_image_to_shape(p_img, crop_size, cv2.BORDER_CONSTANT, value=0)
             p_modal_x, _ = pad_image_to_shape(p_modal_x, crop_size, cv2.BORDER_CONSTANT, value=0)
-            p_img = p_img.transpose(2, 0, 1)
-            if len(modal_x.shape) == 2:
-                p_modal_x = p_modal_x[np.newaxis, ...]
+            p_img = p_img.transpose(2, 0, 1)   # C, H, W
+            if len(modal_x.shape) == 2:     # if Depth/GrayScale
+                p_modal_x = p_modal_x[np.newaxis, ...] # [1, 480, 640]
             else:
                 p_modal_x = p_modal_x.transpose(2, 0, 1) # 3 H W
-        
+            # margin --> length of padding on four side
             return p_img, p_modal_x, margin
     
         p_img = p_img.transpose(2, 0, 1) # 3 H W

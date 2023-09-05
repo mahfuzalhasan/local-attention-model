@@ -58,6 +58,8 @@ def generate_random_crop_pos(ori_size, crop_size):
 
     return pos_h, pos_w
 
+## for scale 1.25 -- img.shape -- > 600, 800
+## shape=crop_size: 480, 640
 def pad_image_to_shape(img, shape, border_mode, value):
     margin = np.zeros(4, np.uint32)
     shape = get_2dshape(shape)
