@@ -33,12 +33,35 @@ class Evaluator(object):
         self.context = mp.get_context('spawn')
         self.val_func = None
         self.results_queue = self.context.Queue(self.ndata)
+        
 
         self.verbose = verbose
         self.save_path = save_path
         if save_path is not None:
             ensure_dir(save_path)
         self.show_image = show_image
+
+    #### model in gpu
+    def run_eval(self, model):
+        device = torch.device("cpu")
+        model.to(device)
+        
+        # results = open(log_file, 'a')
+        #link_file(log_file, log_file_link)
+        # self.val_func = load_model(self.network, os.path.join(model_path, model))
+        self.val_func = model
+        if len(self.devices ) == 1:
+            result_line = self.single_process_evalutation()
+        else:
+            result_line, output_dict = self.multi_process_evaluation()
+
+        #     results.write('Model: ' + model + '\n')
+        #     results.write(result_line)
+        #     results.write('\n')
+        #     results.flush()
+
+        # results.close()
+        return output_dict
 
     def run(self, model_path, model_indice, log_file, log_file_link):
         """There are four evaluation modes:
@@ -155,22 +178,25 @@ class Evaluator(object):
         for p in procs:
             p.join()
 
-        result_line = self.compute_metric(all_results)
+        result_line, output_dict = self.compute_metric(all_results)
         #print("all results multi process: ",all_results)
         logger.info(
             'Evaluation Elapsed Time: %.2fs' % (
                     time.perf_counter() - start_eval_time))
-        return result_line
+        return result_line, output_dict
+    
     # K threads will run this function in parallel using the passed arguments
     def worker(self, shred_list, device):
         start_load_time = time.time()
         logger.info('Load Model on Device %d: %.2fs' % (
             device, time.time() - start_load_time))
 
+        # change for different dataset
         for idx in shred_list:
             dd = self.dataset[idx]
             results_dict = self.func_per_iteration(dd, device)
             self.results_queue.put(results_dict)
+            # self.metrics_queue.put(output_dict)
 
     def func_per_iteration(self, data, device):
         raise NotImplementedError
@@ -211,7 +237,6 @@ class Evaluator(object):
                                                  crop_size, stride_rate, device)
 
         pred = processed_pred.argmax(2)
-
         return pred
 
     def scale_process(self, img, ori_shape, crop_size, stride_rate,
@@ -313,7 +338,7 @@ class Evaluator(object):
 
     
     # add new funtion for rgb and modal X segmentation
-    def sliding_eval_rgbX(self, img, modal_x, crop_size, stride_rate, device=None):
+    def sliding_eval_rgbX(self, img, crop_size, stride_rate, device=None):
         crop_size = to_2tuple(crop_size)
         ori_rows, ori_cols, _ = img.shape
         processed_pred = np.zeros((ori_rows, ori_cols, self.class_num))
@@ -321,30 +346,26 @@ class Evaluator(object):
         for s in self.multi_scales:     #[1]
             ### img resize to scale
             img_scale = cv2.resize(img, None, fx=s, fy=s, interpolation=cv2.INTER_LINEAR)
-            if len(modal_x.shape) == 2:     #Depth Image
-                modal_x_scale = cv2.resize(modal_x, None, fx=s, fy=s, interpolation=cv2.INTER_NEAREST)
-            else:
-                modal_x_scale = cv2.resize(modal_x, None, fx=s, fy=s, interpolation=cv2.INTER_LINEAR)
 
             new_rows, new_cols, _ = img_scale.shape
             # H, W, C --> 480, 640, #num_class
             # if scale 1.25 --> img_scale.shape = 600, 800, 3
-            processed_pred += self.scale_process_rgbX(img_scale, modal_x_scale, (ori_rows, ori_cols),
+            processed_pred += self.scale_process_rgbX(img_scale, (ori_rows, ori_cols),
                                                         crop_size, stride_rate, device)
 
         # for per pixel select the class with maximum score
         pred = processed_pred.argmax(2) # 480, 640, 1
         return pred
 
-    def scale_process_rgbX(self, img, modal_x, ori_shape, crop_size, stride_rate, device=None):
+    def scale_process_rgbX(self, img, ori_shape, crop_size, stride_rate, device=None):
         new_rows, new_cols, c = img.shape           #480, 640, 3
         long_size = new_cols if new_cols > new_rows else new_rows   #640  #800
 
         # new_rows = 600 # new_cols = 800    
         if new_cols <= crop_size[1] or new_rows <= crop_size[0]:      
-            input_data, input_modal_x, margin = self.process_image_rgbX(img, modal_x, crop_size)
+            input_data, margin = self.process_image_rgbX(img, crop_size)
             ### input_data, input_modal_x ---> C, H, W
-            score = self.val_func_process_rgbX(input_data, input_modal_x, device) 
+            score = self.val_func_process_rgbX(input_data, device) 
             #if scale < 1, then discard score for padded portions.
             score = score[:, margin[0]:(score.shape[1] - margin[1]), margin[2]:(score.shape[2] - margin[3])]
         
@@ -354,7 +375,7 @@ class Evaluator(object):
             stride = (int(np.ceil(crop_size[0] * stride_rate)), int(np.ceil(crop_size[1] * stride_rate)))
             # img_pad --> 600, 800, 3
             img_pad, margin = pad_image_to_shape(img, crop_size, cv2.BORDER_CONSTANT, value=0)
-            modal_x_pad, margin = pad_image_to_shape(modal_x, crop_size, cv2.BORDER_CONSTANT, value=0)
+            # modal_x_pad, margin = pad_image_to_shape(modal_x, crop_size, cv2.BORDER_CONSTANT, value=0)
 
             pad_rows = img_pad.shape[0]     # 600
             pad_cols = img_pad.shape[1]     # 800
@@ -375,14 +396,9 @@ class Evaluator(object):
                     s_x = e_x - crop_size[0]        # 0 320
                     s_y = e_y - crop_size[1]        # -40
                     img_sub = img_pad[s_y:e_y, s_x: e_x, :]
-                    if len(modal_x_pad.shape) == 2:
-                        modal_x_sub = modal_x_pad[s_y:e_y, s_x: e_x]
-                    else:
-                        modal_x_sub = modal_x_pad[s_y:e_y, s_x: e_x,:]
 
-
-                    input_data, input_modal_x, tmargin = self.process_image_rgbX(img_sub, modal_x_sub, crop_size)
-                    temp_score = self.val_func_process_rgbX(input_data, input_modal_x, device)
+                    input_data, tmargin = self.process_image_rgbX(img_sub, crop_size)
+                    temp_score = self.val_func_process_rgbX(input_data, device)
                     
                     temp_score = temp_score[:, tmargin[0]:(temp_score.shape[1] - tmargin[1]),
                                             tmargin[2]:(temp_score.shape[2] - tmargin[3])]
@@ -401,13 +417,13 @@ class Evaluator(object):
     # input_modal_x --> 1 x 480 x 640
 
     # device  = 0 
-    def val_func_process_rgbX(self, input_data, input_modal_x, device=None):
+    def val_func_process_rgbX(self, input_data, device=None):
 
         input_data = np.ascontiguousarray(input_data[None, :, :, :], dtype=np.float32)
         input_data = torch.FloatTensor(input_data).cuda(device) # 1, C, H, W, 
 
-        input_modal_x = np.ascontiguousarray(input_modal_x[None, :, :, :], dtype=np.float32)
-        input_modal_x = torch.FloatTensor(input_modal_x).cuda(device)   # 1, C, H, W
+        # input_modal_x = np.ascontiguousarray(input_modal_x[None, :, :, :], dtype=np.float32)
+        # input_modal_x = torch.FloatTensor(input_modal_x).cuda(device)   # 1, C, H, W
 
         # self.val_func --> model
         ## say model --> nn.DataParallel(device = [0, 1])
@@ -419,12 +435,12 @@ class Evaluator(object):
             self.val_func.to(input_data.get_device())
             #print(f'device model:{self.val_func.get_device()} input_device:{input_data.get_device()}')
             with torch.no_grad():
-                score = self.val_func(input_data, input_modal_x)    # 1, C, H, W
+                score = self.val_func(input_data)    # 1, C, H, W
                 score = score[0]                # C, H, W
                 if self.is_flip:
                     input_data = input_data.flip(-1)
-                    input_modal_x = input_modal_x.flip(-1)
-                    score_flip = self.val_func(input_data, input_modal_x)
+                    # input_modal_x = input_modal_x.flip(-1)
+                    score_flip = self.val_func(input_data)
                     score_flip = score_flip[0]
                     score += score_flip.flip(-1)
                 score = torch.exp(score)            # e^score
@@ -433,9 +449,9 @@ class Evaluator(object):
 
     # for rgbd segmentation
     # when scaled image size <= crop_size (original size) condition
-    def process_image_rgbX(self, img, modal_x, crop_size=None):
+    def process_image_rgbX(self, img, crop_size=None):
         p_img = img
-        p_modal_x = modal_x
+        # p_modal_x = modal_x
     
         if img.shape[2] < 3:
             im_b = p_img
@@ -444,28 +460,14 @@ class Evaluator(object):
             p_img = np.concatenate((im_b, im_g, im_r), amodal_xis=2)
     
         p_img = normalize(p_img, self.norm_mean, self.norm_std)
-        #### modal_x --> if GraySclae then normalize with 0 mean and unit variance 
-        if len(modal_x.shape) == 2:
-            p_modal_x = normalize(p_modal_x, 0, 1)
-        else:
-            p_modal_x = normalize(p_modal_x, self.norm_mean, self.norm_std)
     
         if crop_size is not None:       # 480, 640
             p_img, margin = pad_image_to_shape(p_img, crop_size, cv2.BORDER_CONSTANT, value=0)
-            p_modal_x, _ = pad_image_to_shape(p_modal_x, crop_size, cv2.BORDER_CONSTANT, value=0)
+            
             p_img = p_img.transpose(2, 0, 1)   # C, H, W
-            if len(modal_x.shape) == 2:     # if Depth/GrayScale
-                p_modal_x = p_modal_x[np.newaxis, ...] # [1, 480, 640]
-            else:
-                p_modal_x = p_modal_x.transpose(2, 0, 1) # 3 H W
             # margin --> length of padding on four side
-            return p_img, p_modal_x, margin
+            return p_img, margin
     
         p_img = p_img.transpose(2, 0, 1) # 3 H W
-
-        if len(modal_x.shape) == 2:
-            p_modal_x = p_modal_x[np.newaxis, ...]
-        else:
-            p_modal_x = p_modal_x.transpose(2, 0, 1)
     
-        return p_img, p_modal_x
+        return p_img

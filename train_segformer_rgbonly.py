@@ -116,21 +116,7 @@ with Engine(custom_parser=parser) as engine:
     # 6e-5, 0.9, 500*100 = 50000, 10000
     lr_policy = WarmUpPolyLR(base_lr, config.lr_power, total_iteration, config.niters_per_epoch * config.warm_up_epoch)
 
-    if engine.distributed:
-        logger.info('.............distributed training.............')
-        
-        if torch.cuda.is_available():
-            ####### Use DataParallel
-            model.cuda()
-            model = DistributedDataParallel(model, device_ids=[engine.local_rank], 
-                                            output_device=engine.local_rank, find_unused_parameters=False)
-    else:
-        print("multigpu training")
-        print('device ids: ',config.device_ids)
-        model = nn.DataParallel(model, device_ids = config.device_ids)
-        model.to(f'cuda:{model.device_ids[0]}', non_blocking=True)
-        # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        # model.to(device)
+    
 
   
     starting_epoch = 1
@@ -147,6 +133,22 @@ with Engine(custom_parser=parser) as engine:
     logger.info('begin training:')
     
     for epoch in range(starting_epoch, config.nepochs):
+        if engine.distributed:
+            logger.info('.............distributed training.............')
+            
+            if torch.cuda.is_available():
+                ####### Use DataParallel
+                model.cuda()
+                model = DistributedDataParallel(model, device_ids=[engine.local_rank], 
+                                                output_device=engine.local_rank, find_unused_parameters=False)
+        else:
+            print("multigpu training")
+            print('device ids: ',config.device_ids)
+            model = nn.DataParallel(model, device_ids = config.device_ids)
+            model.to(f'cuda:{model.device_ids[0]}', non_blocking=True)
+            # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            # model.to(device)
+
         model.train()
         optimizer.zero_grad()
         for idx, sample in enumerate(train_loader):
@@ -193,14 +195,10 @@ with Engine(custom_parser=parser) as engine:
                 #pbar.set_description(print_str, refresh=True)
                 print(f'{print_str}')
 
-        print(f"########## epoch:{epoch} train_loss:{sum_loss/len(train_loader)}############")
-        writer.add_scalar('train_loss', sum_loss / len(train_loader), epoch)
-        writer.add_scalar('val_loss', val_loss, epoch)
-
-        ## Need to compute metrices for validation set
-        val_loss = val_cityscape(epoch, val_loader, model)
+        train_loss = sum_loss/len(train_loader)
+        print(f"########## epoch:{epoch} train_loss:{train_loss}############")
+        writer.add_scalar('train_loss', train_loss, epoch)
         
-
         if (epoch >= config.checkpoint_start_epoch) and (epoch % config.checkpoint_step == 0) or (epoch == config.nepochs):
             save_dir = os.path.join(config.checkpoint_dir, str(run_id))
             if not os.path.exists(save_dir):
@@ -212,4 +210,18 @@ with Engine(custom_parser=parser) as engine:
                 'optimizer': optimizer.state_dict()
             }
             torch.save(states, save_file_path)
+
+        ## Need to compute metrices for validation set
+        val_loss, val_metrics = val_cityscape(epoch, cityscapes_val, val_loader, model)
+
+        
+        writer.add_scalar('val_loss', val_loss, epoch)
+        writer.add_scalar('val_mIOU', val_metrics['mean_iou'], epoch)
+        writer.add_scalar('freq_IOU', val_metrics['freq_iou'], epoch)
+        writer.add_scalar('m_pixel_acc', val_metrics['mean_pixel_acc'], epoch)
+
+        val_mean_iou = val_metrics['mean_iou']
+        print(f't_loss:{train_loss:.4f} v_loss:{val_loss:.4f} val_mIOU:{val_mean_iou:.4f}')
+
+        
         

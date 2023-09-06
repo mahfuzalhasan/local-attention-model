@@ -16,6 +16,7 @@ from torch.nn.parallel import DistributedDataParallel, DataParallel
 ## Dataset-specific imports
 # from config import config
 from config_cityscapes import config
+from eval import SegEvaluator
 # from dataloader.dataloader import get_train_loader
 
 from models.builder import EncoderDecoder as segmodel
@@ -31,7 +32,7 @@ from utils.pyt_utils import all_reduce_tensor
 from tensorboardX import SummaryWriter
 
 
-def val_cityscape(epoch, val_loader, model):
+def val_cityscape(epoch, val_dataset, val_loader, model):
     model.eval()
 
     with torch.no_grad():
@@ -64,4 +65,20 @@ def val_cityscape(epoch, val_loader, model):
 
         val_loss = sum_loss/len(val_loader)
         print(f"########## epoch:{epoch} val_loss:{val_loss}############")
-        return val_loss
+        
+        print(f"\n $$$$$$$ evaluating in epoch:{epoch} $$$$$$$ \n")
+
+        
+        all_devices = config.device_ids
+        save_path = None
+        verbose = False
+        show_image = False
+        segmentor = SegEvaluator(val_dataset, config.num_classes, config.norm_mean,
+                                 config.norm_std, model,
+                                 config.eval_scale_array, config.eval_flip,
+                                 all_devices, verbose, save_path,
+                                 show_image)
+                                 
+        output_dict = segmentor.run_eval(model)
+
+        return val_loss, output_dict

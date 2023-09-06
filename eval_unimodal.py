@@ -24,16 +24,14 @@ logger = get_logger()
 
 class SegEvaluator(Evaluator):
     def func_per_iteration(self, data, device):
-        img = data['image']      # H, W, C
+        img = data['data']      # H, W, C
         label = data['label']  
-        # modal_x = data['modal_x']
-        name = data['id']
-        pred = self.sliding_eval_rgbX(img, config.eval_crop_size, config.eval_stride_rate, device)
+        modal_x = data['modal_x']
+        name = data['fn']
+        pred = self.sliding_eval_rgbX(img, modal_x, config.eval_crop_size, config.eval_stride_rate, device)
         hist_tmp, labeled_tmp, correct_tmp = hist_info(config.num_classes, pred, label)
         results_dict = {'hist': hist_tmp, 'labeled': labeled_tmp, 'correct': correct_tmp}
 
-
-        ###### output is saved here.
         if self.save_path is not None:
             ensure_dir(self.save_path)
             ensure_dir(self.save_path+'_color')
@@ -77,11 +75,10 @@ class SegEvaluator(Evaluator):
             count += 1
         
         iou, mean_IoU, _, freq_IoU, mean_pixel_acc, pixel_acc = compute_score(hist, correct, labeled)
-        result_dict = dict(mean_iou=mean_IoU, freq_iou=freq_IoU, mean_pixel_acc=mean_pixel_acc)
         
         result_line = print_iou(iou, freq_IoU, mean_pixel_acc, pixel_acc,
                                 dataset.class_names, show_no_back=False)
-        return result_line, result_dict
+        return result_line
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
