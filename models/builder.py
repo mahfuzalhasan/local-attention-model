@@ -103,11 +103,11 @@ class EncoderDecoder(nn.Module):
                 self.norm_layer, cfg.bn_eps, cfg.bn_momentum,
                 mode='fan_in', nonlinearity='relu')
 
-    def encode_decode(self, rgb, modal_x):
+    def encode_decode(self, rgb):
         """Encode images with backbone and decode into a semantic segmentation
         map of the same size as input."""
         orisize = rgb.shape
-        x = self.backbone(rgb, modal_x)
+        x = self.backbone(rgb)
         out = self.decode_head.forward(x)
         out = F.interpolate(out, size=orisize[2:], mode='bilinear', align_corners=False)
         if self.aux_head:
@@ -116,11 +116,11 @@ class EncoderDecoder(nn.Module):
             return out, aux_fm
         return out
 
-    def forward(self, rgb, modal_x, label=None):
+    def forward(self, rgb, label=None):
         if self.aux_head:
-            out, aux_fm = self.encode_decode(rgb, modal_x)
+            out, aux_fm = self.encode_decode(rgb)
         else:
-            out = self.encode_decode(rgb, modal_x)
+            out = self.encode_decode(rgb)
         if label is not None:
             loss = self.criterion(out, label.long())
             if self.aux_head:

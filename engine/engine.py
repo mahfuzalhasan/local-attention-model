@@ -63,7 +63,7 @@ class Engine(object):
 
     def inject_default_parser(self):
         p = self.parser
-        p.add_argument('-d', '--devices', default='0,1,2,3',
+        p.add_argument('-d', '--devices', default='0,1',
                        help='set data parallel training')
         p.add_argument('-c', '--continue', type=extant_file,
                        metavar="FILE",

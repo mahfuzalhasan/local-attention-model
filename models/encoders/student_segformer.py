@@ -444,7 +444,7 @@ def load_dualpath_model(model, model_file):
             raw_state_dict = raw_state_dict['model']
     else:
         raw_state_dict = model_file
-    
+    #print(f'\n \n #####raw_state_dict: {raw_state_dict.keys()} \n') 
     # state_dict = {}
     # for k, v in raw_state_dict.items():
     #     if k.find('patch_embed') >= 0:
@@ -470,9 +470,9 @@ def load_dualpath_model(model, model_file):
     #         print(v.shape) 
     #     print(k)
 
+    #print(f'\n \n #####model.state.dict.keys::: {model.state_dict().keys()} \n ')
     model.load_state_dict(raw_state_dict, strict=False)
-    del state_dict
-    
+    #del state_dict
     t_end = time.time()
     logger.info(
         "Load model, Time usage:\n\tIO: {}, initialize parameters: {}".format(

@@ -24,7 +24,7 @@ class CityscapesDataset(data.Dataset):
         self.split = split
         self.cfg = cfg
 
-        self.mode = cfg.DATASET.MODE
+        self.mode = cfg.DATASET.MODE 
 
         self.loader = CityscapesSampleLoader(cfg, split)
 
@@ -40,7 +40,7 @@ class CityscapesDataset(data.Dataset):
 
         # 'troisdorf_000000_000073' is corrupted
         self.files[split] = [x for x in self.recursive_glob(rootdir=self.images_base, suffix='.png') if 'troisdorf_000000_000073' not in x]
-
+        self.files[split] = self.files[split][:100]
         if not self.files[split]:
             raise Exception("No files for split=[%s] found in %s" % (split, self.images_base))
 
@@ -49,6 +49,9 @@ class CityscapesDataset(data.Dataset):
     def __len__(self):
         return len(self.files[self.split])
 
+    def get_length(self):
+            return self.__len__()
+    
     def __getitem__(self, index):
         img_path, depth_path, lbl_path = self.get_path(index, self.cfg.DATASET.SCRAMBLE_LABELS)
         sample = self.loader.load_sample(img_path, depth_path, lbl_path)
@@ -94,8 +97,8 @@ class CityscapesDataset(data.Dataset):
 
 class CityscapesSampleLoader(SampleLoader):
     def __init__(self, cfg, split="train"):
-        super().__init__(cfg, mode=cfg.DATASET.MODE, split=split,
-                        base_size=cfg.DATASET.BASE_SIZE, crop_size=cfg.DATASET.CROP_SIZE)
+        super().__init__(cfg, mode='RGB', split=split,
+                        base_size=513, crop_size=513)
 
         self.void_classes = [0, 1, 2, 3, 4, 5, 6, 9, 10, 14, 15, 16, 18, 29, 30, -1]
         self.valid_classes = [7, 8, 11, 12, 13, \

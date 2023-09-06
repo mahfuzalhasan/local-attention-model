@@ -29,12 +29,26 @@ from engine.engine import Engine
 from engine.logger import get_logger
 from utils.pyt_utils import all_reduce_tensor
 
+from dataloader.cfg_defaults import get_cfg_defaults
+
 # from models.encoders.
 
 
 from tensorboardX import SummaryWriter
 
-parser = argparse.ArgumentParser()
+# parser = argparse.ArgumentParser()
+parser = argparse.ArgumentParser(description="Test cityscapes Loader")
+parser.add_argument('config_file', help='config file path')
+parser.add_argument("opts", help="Modify config options using the command-line", default=None, nargs=argparse.REMAINDER)
+#parser.add_argument('devices', default='0,1', type=str)
+args = parser.parse_args()
+print(args.opts)
+cfg = get_cfg_defaults()
+cfg.merge_from_file(args.config_file) # dataloader/cityscapes_rgbd_config.yaml
+cfg.merge_from_list(args.opts)
+cfg.freeze()
+print(cfg)
+
 logger = get_logger()
 
 os.environ['MASTER_PORT'] = '169710'
@@ -61,10 +75,10 @@ with Engine(custom_parser=parser) as engine:
     # print('train dataloader size: ',len(train_loader))
 
 
-    cityscapes_train = CityscapesDataset(config, split='train')
+    cityscapes_train = CityscapesDataset(cfg, split='train')
     train_loader = DataLoader(cityscapes_train, batch_size=8, shuffle=True, num_workers=4)
 
-    cityscapes_val = CityscapesDataset(config, split='val')
+    cityscapes_val = CityscapesDataset(cfg, split='val')
     val_loader = DataLoader(cityscapes_val, batch_size=8, shuffle=False, num_workers=4)
 
     # if (engine.distributed and (engine.local_rank == 0)) or (not engine.distributed):
@@ -89,9 +103,9 @@ with Engine(custom_parser=parser) as engine:
     print('Loaded fresh model')
 
     # Loading model from Segformer's starting point (load model pretrained on ImageNet)   
-    load_model_from = osp.join(config.pretrained_model)
-    state_dict = torch.load(load_model_from)
-    model.load_state_dict(state_dict, strict=True)
+    #load_model_from = osp.join(config.pretrained_model)
+    #state_dict = torch.load(load_model_from)
+    #model.load_state_dict(state_dict, strict=True)
     print('Loaded model from state_dict')
     # exit()
     
@@ -151,6 +165,7 @@ with Engine(custom_parser=parser) as engine:
 
         model.train()
         optimizer.zero_grad()
+        sum_loss = 0
         for idx, sample in enumerate(train_loader):
 
             # engine.update_iteration(epoch, idx)

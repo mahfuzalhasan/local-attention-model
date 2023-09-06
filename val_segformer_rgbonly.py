@@ -34,7 +34,7 @@ from tensorboardX import SummaryWriter
 
 def val_cityscape(epoch, val_dataset, val_loader, model):
     model.eval()
-
+    sum_loss = 0
     with torch.no_grad():
         for idx, sample in enumerate(val_loader):
 
