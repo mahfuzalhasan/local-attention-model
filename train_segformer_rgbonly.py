@@ -146,8 +146,6 @@ with Engine(custom_parser=parser) as engine:
 
     logger.info('begin training:')
     
-    # total epoch
-    # for epoch in range(engine.state.epoch, config.nepochs+1):
     for epoch in range(starting_epoch, config.nepochs):
         model.train()
         optimizer.zero_grad()

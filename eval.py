@@ -17,6 +17,9 @@ from dataloader.RGBXDataset import RGBXDataset
 from models.builder import EncoderDecoder as segmodel
 from dataloader.nyudv2_dataloader import ValPre
 
+import torch.multiprocessing
+torch.multiprocessing.set_sharing_strategy('file_system')
+
 logger = get_logger()
 
 class SegEvaluator(Evaluator):
@@ -87,7 +90,7 @@ if __name__ == "__main__":
     parser.add_argument('--save_path', '-p', default=None)
 
     args = parser.parse_args()
-    all_dev = parse_devices(args.devices)
+    all_devices = config.device_ids
 
 
     #data_dir = r'./data/nyudv2'
@@ -112,7 +115,7 @@ if __name__ == "__main__":
 
     #exit()
     network = segmodel(cfg=config, criterion=None, norm_layer=nn.BatchNorm2d)
-    print("multigpu training")
+    # print("multigpu training")
     # network = nn.DataParallel(network, device_ids = [0])
     # network.to(f'cuda:{network.device_ids[0]}', non_blocking=True) #wrap weights inside module
 
@@ -138,7 +141,7 @@ if __name__ == "__main__":
         segmentor = SegEvaluator(dataset, config.num_classes, config.norm_mean,
                                  config.norm_std, network,
                                  config.eval_scale_array, config.eval_flip,
-                                 all_dev, args.verbose, args.save_path,
+                                 all_devices, args.verbose, args.save_path,
                                  args.show_image)
         saved_model_path = os.path.join(config.checkpoint_dir, "07-14-23_1803")
         """ segmentor.run(config.checkpoint_dir, "NYUDV2_CMX+Segformer-B2.pth", config.val_log_file,
