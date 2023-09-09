@@ -86,7 +86,8 @@ class StokenAttention(nn.Module):
         
         self.stoken_refine = AttentionST(dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=proj_drop)
        
-        
+    ## Attention from larger patch --> x_l
+    # Attention from smaller patch --> x_s
     def stoken_forward(self, x_s, x_l):
         '''
            x: (B, C, H, W)
@@ -109,10 +110,12 @@ class StokenAttention(nn.Module):
         hs, ws = self.sp_stoken_size
         token_small_attn = F.avg_pool2d(x_s, (hs, ws))
         token_small_attn = F.avg_pool2d(token_small_attn, (2, 2))
-        #print(f'sf:{token_small_attn.shape}')
+        print(f'sf:{token_small_attn.shape}')
         
+        ### for the sake of carrying info from large token space to small token space
         token_large_attn = F.adaptive_avg_pool2d(x_l, (hh, ww)) # (B, C, hh, ww)
         stoken_features = token_small_attn + token_large_attn
+
         pixel_features = x_l.reshape(B, C, hh, h, ww, w).permute(0, 2, 4, 3, 5, 1).reshape(B, hh*ww, h*w, C)
         #print(f'token features:{stoken_features.shape}  pixel f:{pixel_features.shape}')
         with torch.no_grad():

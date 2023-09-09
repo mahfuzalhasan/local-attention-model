@@ -24,6 +24,7 @@ class SampleLoader():
 
     def get_sample(self, img_path, depth_path, lbl_path):
         _img = Image.open(img_path).convert('RGB')
+        # print(f'img: {_img.size}')
 
         if self.mode in ["RGB_HHA", "RGBD"]:
             _depth = self.loadDepth(depth_path)
@@ -31,6 +32,7 @@ class SampleLoader():
             _depth = []
 
         _target = self.getLabels(lbl_path)
+        # print(f'label: {_target.size}')
 
         sample = {'image': _img, 'label': _target, 'depth': _depth}
         return sample
@@ -45,6 +47,7 @@ class SampleLoader():
         elif self.cfg.DATASET.NORMALIZE_ONLY:
             sample = self.transform_norm(sample)
         else:
+            ### CityScape w = 2048 H = 1024
             if self.split in ['train', 'train_extra']:
                 sample = self.transform_tr(sample)
             elif self.split == 'val':

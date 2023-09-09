@@ -50,6 +50,7 @@ class Evaluator(object):
         #link_file(log_file, log_file_link)
         # self.val_func = load_model(self.network, os.path.join(model_path, model))
         self.val_func = model
+        print(f'\n ################model device:{next(self.val_func.parameters()).is_cuda} \n ')
         if len(self.devices ) == 1:
             result_line = self.single_process_evalutation()
         else:
@@ -194,6 +195,8 @@ class Evaluator(object):
         # change for different dataset
         for idx in shred_list:
             dd = self.dataset[idx]
+            print(f'############### \n idx: {idx} device:{device}')
+            print(f'dd: {dd.keys()} \n ##################')
             results_dict = self.func_per_iteration(dd, device)
             self.results_queue.put(results_dict)
             # self.metrics_queue.put(output_dict)
@@ -418,7 +421,7 @@ class Evaluator(object):
 
     # device  = 0 
     def val_func_process_rgbX(self, input_data, device=None):
-
+        
         input_data = np.ascontiguousarray(input_data[None, :, :, :], dtype=np.float32)
         input_data = torch.FloatTensor(input_data).cuda(device) # 1, C, H, W, 
 
@@ -429,18 +432,21 @@ class Evaluator(object):
         ## say model --> nn.DataParallel(device = [0, 1])
         ### self.val_func --> device 1
         with torch.cuda.device(input_data.get_device()):
-            self.val_func.eval()
+            
 
             # send model to device --> input device
             self.val_func.to(input_data.get_device())
+            self.val_func.eval()
             #print(f'device model:{self.val_func.get_device()} input_device:{input_data.get_device()}')
             with torch.no_grad():
                 score = self.val_func(input_data)    # 1, C, H, W
+                print(f'score_flip: {score.shape}')
                 score = score[0]                # C, H, W
                 if self.is_flip:
                     input_data = input_data.flip(-1)
                     # input_modal_x = input_modal_x.flip(-1)
                     score_flip = self.val_func(input_data)
+                    
                     score_flip = score_flip[0]
                     score += score_flip.flip(-1)
                 score = torch.exp(score)            # e^score

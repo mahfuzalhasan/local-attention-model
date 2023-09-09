@@ -5,6 +5,7 @@ import time
 import argparse
 from tqdm import tqdm
 from datetime import datetime
+import numpy as np
 
 import torch
 from  torch.utils.data import DataLoader
@@ -28,13 +29,20 @@ from utils.lr_policy import WarmUpPolyLR
 from engine.engine import Engine
 from engine.logger import get_logger
 from utils.pyt_utils import all_reduce_tensor
+from utils.metric import cal_mean_iou
 
 from tensorboardX import SummaryWriter
 
 
-def val_cityscape(epoch, val_dataset, val_loader, model):
+import torch.multiprocessing
+torch.multiprocessing.set_sharing_strategy('file_system')
+
+
+
+def val_cityscape(epoch, val_loader, model):
     model.eval()
     sum_loss = 0
+    m_iou_batches = []
     with torch.no_grad():
         for idx, sample in enumerate(val_loader):
 
@@ -46,12 +54,13 @@ def val_cityscape(epoch, val_dataset, val_loader, model):
             gts = gts.to(f'cuda:{model.device_ids[0]}', non_blocking=True)  
 
             aux_rate = 0.2
-            loss = model(imgs, gts)
-
+            loss, out = model(imgs, gts)
             # mean over multi-gpu result
-            loss = torch.mean(loss) 
-
+            loss = torch.mean(loss)
+            m_iou = cal_mean_iou(out, gts)
             
+            m_iou_batches.append(m_iou)
+
             sum_loss += loss
 
             print_str = 'Epoch {}/{}'.format(epoch, config.nepochs) \
@@ -59,26 +68,13 @@ def val_cityscape(epoch, val_dataset, val_loader, model):
                     + ' loss=%.4f total_loss=%.4f' % (loss, (sum_loss / (idx + 1)))+'\n'
 
             del loss
-            if idx % config.print_stats == 0:
+            if idx % config.val_print_stats == 0:
                 #pbar.set_description(print_str, refresh=True)
                 print(f'{print_str}')
 
         val_loss = sum_loss/len(val_loader)
-        print(f"########## epoch:{epoch} val_loss:{val_loss}############")
-        
+        val_mean_iou = np.mean(np.asarray(m_iou_batches))
         print(f"\n $$$$$$$ evaluating in epoch:{epoch} $$$$$$$ \n")
+        print(f"########## epoch:{epoch} val_loss:{val_loss} mean val iou: {val_mean_iou}############")
 
-        
-        all_devices = config.device_ids
-        save_path = None
-        verbose = False
-        show_image = False
-        segmentor = SegEvaluator(val_dataset, config.num_classes, config.norm_mean,
-                                 config.norm_std, model,
-                                 config.eval_scale_array, config.eval_flip,
-                                 all_devices, verbose, save_path,
-                                 show_image)
-                                 
-        output_dict = segmentor.run_eval(model)
-
-        return val_loss, output_dict
+        return val_loss, val_mean_iou

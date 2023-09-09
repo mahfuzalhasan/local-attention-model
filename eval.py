@@ -28,7 +28,15 @@ class SegEvaluator(Evaluator):
         label = data['label']  
         # modal_x = data['modal_x']
         name = data['id']
-        print(f'Image Shape: ####  {img.shape}')
+        print(f'Image Shape: ####  {img.shape} {type(img)}')
+
+        img = torch.permute(img, (1, 2, 0))
+        img = img.detach().cpu().numpy()
+        # img = img.numpy(force = True)
+        # label = torch.permute(label, (1, 2, 0))
+        label = label.detach().cpu().numpy()
+        # label = label.numpy(force = True)
+
         pred = self.sliding_eval_rgbX(img, config.eval_crop_size, config.eval_stride_rate, device)
         hist_tmp, labeled_tmp, correct_tmp = hist_info(config.num_classes, pred, label)
         results_dict = {'hist': hist_tmp, 'labeled': labeled_tmp, 'correct': correct_tmp}

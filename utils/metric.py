@@ -1,9 +1,19 @@
 # encoding: utf-8
 
 import numpy as np
+import torch
+from torchmetrics import JaccardIndex
 
 np.seterr(divide='ignore', invalid='ignore')
 
+
+
+def cal_mean_iou(pred, target):
+    score = torch.exp(pred) # B, C, H, W
+    jaccard = JaccardIndex(task="multiclass", num_classes=score.shape[1], ignore_index = 255).to(score.get_device())    
+    mean_iou = jaccard(score, target)
+    # print('mean iou: ',mean_iou)
+    return mean_iou.detach().cpu().numpy()
 
 def hist_info(n_cl, pred, gt):
     assert (pred.shape == gt.shape)

@@ -40,7 +40,7 @@ class CityscapesDataset(data.Dataset):
 
         # 'troisdorf_000000_000073' is corrupted
         self.files[split] = [x for x in self.recursive_glob(rootdir=self.images_base, suffix='.png') if 'troisdorf_000000_000073' not in x]
-        self.files[split] = self.files[split][:100]
+        # self.files[split] = self.files[split][:100]
         if not self.files[split]:
             raise Exception("No files for split=[%s] found in %s" % (split, self.images_base))
 
@@ -115,6 +115,7 @@ class CityscapesSampleLoader(SampleLoader):
 
         self.ignore_index = 255
         self.class_map = dict(zip(self.valid_classes, range(self.NUM_CLASSES)))
+        print(f'class mapping: {self.class_map}')
 
     def normalizationFactors(self):
         if self.mode == "RGBD":
@@ -176,6 +177,7 @@ class CityscapesSampleLoader(SampleLoader):
 
     def encode_segmap(self, mask):
         # Put all void classes to zero
+        ##### mapping all void classes to ignore_index = 255
         for _voidc in self.void_classes:
             mask[mask == _voidc] = self.ignore_index
         for _validc in self.valid_classes:

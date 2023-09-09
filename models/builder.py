@@ -116,14 +116,14 @@ class EncoderDecoder(nn.Module):
             return out, aux_fm
         return out
 
-    def forward(self, rgb, label=None):
+    def forward(self, rgb, label):
         if self.aux_head:
             out, aux_fm = self.encode_decode(rgb)
         else:
             out = self.encode_decode(rgb)
-        if label is not None:
-            loss = self.criterion(out, label.long())
-            if self.aux_head:
-                loss += self.aux_rate * self.criterion(aux_fm, label.long())
-            return loss
-        return out
+            # print(f'output: {out.size()}')
+
+        loss = self.criterion(out, label.long())
+        if self.aux_head:
+            loss += self.aux_rate * self.criterion(aux_fm, label.long())
+        return loss, out

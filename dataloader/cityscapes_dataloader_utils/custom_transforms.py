@@ -125,6 +125,19 @@ class RandomGaussianBlur(object):
         return {'image': img,
                 'depth': depth,
                 'label': mask}
+# class RandomResizeCrop(object):
+#     def __init__(self, img_size, scale, ratio):
+#         self.img_size = img_size
+#         self.scale = scale
+#         self.ratio = ratio
+#         self.crop_transform = transforms.RandomResizedCrop(size=(300, 600))
+
+#     def __call__(self, sample):
+#         img = sample['image']
+#         mask = sample['label']
+#         depth = sample['depth']
+
+
 
 
 class RandomScaleCrop(object):
@@ -140,24 +153,28 @@ class RandomScaleCrop(object):
 
         # random scale (short edge)
         short_size = random.randint(int(self.base_size * 0.5), int(self.base_size * 2.0))
-        w, h = img.size
+        #### [256, 1024]
+        
+        w, h = img.size #[2048, 1024]
+
         if h > w:
             ow = short_size
             oh = int(1.0 * h * ow / w)
         else:
-            oh = short_size
-            ow = int(1.0 * w * oh / h)
-        mask = mask.resize((ow, oh), Image.NEAREST)
+            oh = short_size     
+            ow = int(1.0 * w * oh / h)  
+        mask = mask.resize((ow, oh), Image.NEAREST) 
         # pad crop
         if short_size < self.crop_size:
             padh = self.crop_size - oh if oh < self.crop_size else 0
             padw = self.crop_size - ow if ow < self.crop_size else 0
             mask = ImageOps.expand(mask, border=(0, 0, padw, padh), fill=self.fill)
         # random crop crop_size
-        w_resize, h_resize = mask.size
-        x1 = random.randint(0, w_resize - self.crop_size)
-        y1 = random.randint(0, h_resize - self.crop_size)
+        w_resize, h_resize = mask.size      #2400, 1200
+        x1 = random.randint(0, w_resize - self.crop_size) # 1376
+        y1 = random.randint(0, h_resize - self.crop_size)   # 176
 
+        #### (1376, 176, 2400, 1200) --> 1024 x 1024
         mask = mask.crop((x1, y1, x1 + self.crop_size, y1 + self.crop_size))
 
         img = img.resize((ow, oh), Image.BILINEAR)

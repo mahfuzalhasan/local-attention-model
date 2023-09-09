@@ -20,18 +20,18 @@ _C.TEST.BATCH_SIZE = 1
 
 _C.DATASET = CN()
 # ['pascal', 'coco', 'cityscapes', 'sunrgbd']
-_C.DATASET.NAME = 'coco'
-_C.DATASET.N_CLASSES = 81
+_C.DATASET.NAME = 'cityscapes'
+_C.DATASET.N_CLASSES = 19
 # Root directory of dataset
-_C.DATASET.ROOT = 'datasets/coco/'
+_C.DATASET.ROOT = 'datasets/Cityscapes/'
 # whether to use SBD dataset
 _C.DATASET.USE_STD = True
 # Base image size
-_C.DATASET.BASE_SIZE = 513
+_C.DATASET.BASE_SIZE = 512
 # Crop image size
-_C.DATASET.CROP_SIZE = 513
+_C.DATASET.CROP_SIZE = 1024
 # Use RGB-D input
-_C.DATASET.MODE = 'RGBD' #['RGBD', 'RGB', 'RGB_HHA']
+_C.DATASET.MODE = 'RGB' #['RGBD', 'RGB', 'RGB_HHA']
 _C.DATASET.SYNTHETIC = False
 # What kind of annotations to use
 _C.DATASET.ANNOTATION_TYPE = 'semantic' #['instance', 'bbox']

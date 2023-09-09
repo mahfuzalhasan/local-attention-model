@@ -121,8 +121,7 @@ class MultiScaleAttention(nn.Module):
         ####print('!!!!!!!!!!!!attention head: ',self.num_heads, ' !!!!!!!!!!')
         A = []
         B, N, C = x.shape
-        q = self.q(x).reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3) 
-        
+        q = self.q(x).reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
 
         # This reduces dimension of k and v
         # 120, 160 --Flatten--> 19200--FNN--> 300

@@ -83,5 +83,22 @@ img_pad = np.zeros((600, 800, 3))
 img_sub = img_pad[s_y:e_y, s_x: e_x, :]
 
 print('img sub: ',img_sub.shape)
+import torch
+from torchmetrics import JaccardIndex
+
+
+H = 513
+W = 513
+B = 8
+C = 19
+jaccard = JaccardIndex(task="multiclass", num_classes=19)
+
+target = torch.randint(0, 19, (B, H, W))
+target[B-1, 10:20, 0:3] = 255
+pred = torch.randn(B, C, H, W)
+print(pred.shape, target.shape)
+
+miou = jaccard(pred, target)
+print(miou)
 
 

@@ -37,7 +37,7 @@ C.x_is_single_channel = False # True for raw depth, thermal and aolp/dolp(not ao
 C.train_source = osp.join(C.dataset_path, "train.txt")
 C.eval_source = osp.join(C.dataset_path, "test.txt")
 C.is_test = False
-C.num_train_imgs = 795
+C.num_train_imgs = 2975
 C.num_eval_imgs = 654
 C.num_classes = 19
 C.class_names =  ['wall','floor','cabinet','bed','chair','sofa','table','door','window','bookshelf','picture','counter','blinds',
@@ -47,8 +47,8 @@ C.class_names =  ['wall','floor','cabinet','bed','chair','sofa','table','door','
 
 """Image Config"""
 C.background = 255
-C.image_height = 480
-C.image_width = 640
+C.image_height = 513
+C.image_width = 513
 C.norm_mean = np.array([0.485, 0.456, 0.406])
 C.norm_std = np.array([0.229, 0.224, 0.225])
 
@@ -62,7 +62,7 @@ C.optimizer = 'AdamW'
 
 """Train Config"""
 C.lr = 6e-5
-C.lr_power = 0.9
+C.lr_power = 1
 C.momentum = 0.9
 C.weight_decay = 0.01
 C.batch_size = 8
@@ -70,12 +70,13 @@ C.nepochs = 500
 C.niters_per_epoch = C.num_train_imgs // C.batch_size  + 1
 C.num_workers = 16
 C.train_scale_array = [0.5, 0.75, 1, 1.25, 1.5, 1.75]
-C.warm_up_epoch = 10
+C.warm_up_epoch = 4
 
 C.fix_bias = True
 C.bn_eps = 1e-3
 C.bn_momentum = 0.1
-C.print_stats = 30
+C.train_print_stats = 50
+C.val_print_stats = 60
 #C.device_ids = [0] # for mahdi (lab-pc)
 C.device_ids = [0, 1] # for mahdi (newton)
 #C.device_ids = [0, 1, 2, 3] # for sakin
@@ -87,7 +88,7 @@ C.eval_iter = 25
 C.eval_stride_rate = 2 / 3
 C.eval_scale_array = [1] # [0.75, 1, 1.25] # 
 C.eval_flip = False # True # 
-C.eval_crop_size = [480, 640] # [height width]
+C.eval_crop_size = [513, 513] # [height width]
 
 """Store Config"""
 C.checkpoint_start_epoch = 250
