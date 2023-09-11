@@ -97,8 +97,8 @@ class CityscapesDataset(data.Dataset):
 
 class CityscapesSampleLoader(SampleLoader):
     def __init__(self, cfg, split="train"):
-        super().__init__(cfg, mode='RGB', split=split,
-                        base_size=513, crop_size=513)
+        super().__init__(cfg, mode=cfg.DATASET.MODE, split=split,
+                        base_size=cfg.DATASET.BASE_SIZE, crop_size=cfg.DATASET.CROP_SIZE)
 
         self.void_classes = [0, 1, 2, 3, 4, 5, 6, 9, 10, 14, 15, 16, 18, 29, 30, -1]
         self.valid_classes = [7, 8, 11, 12, 13, \
