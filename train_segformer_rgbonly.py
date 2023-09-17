@@ -186,28 +186,32 @@ def Main(parser, cfg, args):
             print(f"########## epoch:{epoch} train_loss:{train_loss} t_miou:{train_mean_iou}############")
             writer.add_scalar('train_loss', train_loss, epoch)
             writer.add_scalar('train_loss', train_mean_iou, epoch)
-            
-            if (epoch >= config.checkpoint_start_epoch) and (epoch % config.checkpoint_step == 0) or (epoch == config.nepochs):
-                save_dir = os.path.join(config.checkpoint_dir, str(run_id))
-                if not os.path.exists(save_dir):
-                    os.makedirs(save_dir)
-                save_file_path = os.path.join(save_dir, 'model_{}.pth'.format(epoch))
-                states = {
-                    'epoch': epoch,
-                    'model': model.state_dict(),
-                    'optimizer': optimizer.state_dict()
-                }
-                torch.save(states, save_file_path)
 
-            ## Need to compute metrices for validation set
-            val_loss, val_mean_iou = val_cityscape(epoch, val_loader, model)
+            #save model every 10 epochs before checkpoint_start_epoch
+            if (epoch < config.checkpoint_start_epoch) and (epoch % (config.checkpoint_step*2) == 0):
+                save_model(model, optimizer, epoch, run_id, config.checkpoint_dir)
+            #save model every 5 epochs after checkpoint_start_epoch
+            elif (epoch >= config.checkpoint_start_epoch) and (epoch % config.checkpoint_step == 0) or (epoch == config.nepochs):
+                save_model(model, optimizer, epoch, run_id, config.checkpoint_dir)
             
+            # compute val metrics
+            val_loss, val_mean_iou = val_cityscape(epoch, val_loader, model)            
             writer.add_scalar('val_loss', val_loss, epoch)
             writer.add_scalar('val_mIOU', val_mean_iou, epoch)
             # print(f't_loss:{train_loss:.4f} v_loss:{val_loss:.4f} val_mIOU:{val_mean_iou:.4f}')
 
-        
-        
+def save_model(model, optimizer, epoch, run_id, checkpoint_dir):
+    save_dir = os.path.join(checkpoint_dir, str(run_id))
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+    save_file_path = os.path.join(save_dir, 'model_{}.pth'.format(epoch))
+    states = {
+            'epoch': epoch,
+            'model': model.state_dict(),
+            'optimizer': optimizer.state_dict()
+    }
+    torch.save(states, save_file_path)
+    
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description="Test cityscapes Loader")
     parser.add_argument('config_file', help='config file path')
