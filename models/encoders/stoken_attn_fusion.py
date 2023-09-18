@@ -110,7 +110,7 @@ class StokenAttention(nn.Module):
         hs, ws = self.sp_stoken_size
         token_small_attn = F.avg_pool2d(x_s, (hs, ws))
         token_small_attn = F.avg_pool2d(token_small_attn, (2, 2))
-        print(f'sf:{token_small_attn.shape}')
+        #print(f'sf:{token_small_attn.shape}')
         
         ### for the sake of carrying info from large token space to small token space
         token_large_attn = F.adaptive_avg_pool2d(x_l, (hh, ww)) # (B, C, hh, ww)
