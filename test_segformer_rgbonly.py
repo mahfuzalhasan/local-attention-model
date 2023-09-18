@@ -45,7 +45,9 @@ from val_segformer_rgbonly import val_cityscape
 def Main(parser, cfg, args):
     with Engine(custom_parser=parser) as engine:
         
-        model = segmodel(cfg=config, norm_layer=BatchNorm2d)
+        criterion = nn.CrossEntropyLoss(reduction='mean', ignore_index=config.background)
+
+        model = segmodel(cfg=config, criterion=criterion, norm_layer=nn.BatchNorm2d)
         model = nn.DataParallel(model, device_ids = config.device_ids)
         model.to(f'cuda:{model.device_ids[0]}', non_blocking=True)
 
@@ -55,7 +57,7 @@ def Main(parser, cfg, args):
         saved_model_path = os.path.join(config.checkpoint_dir, "09-12-23_1501", 'model_350.pth')
         
         state_dict = torch.load(saved_model_path)
-        model.load_state_dict(state_dict['model'])
+        model.load_state_dict(state_dict['model'], strict=True)
         epoch = state_dict['epoch']
         
         # model.eval()

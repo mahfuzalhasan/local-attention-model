@@ -14,7 +14,7 @@ class SampleLoader():
         self.base_size = base_size
         self.crop_size = crop_size
         self.darken = cfg.DATASET.DARKEN.DARKEN
-
+        
         self.normalizationFactors()
 
     def normalizationFactors(self):
@@ -24,7 +24,7 @@ class SampleLoader():
 
     def get_sample(self, img_path, depth_path, lbl_path):
         _img = Image.open(img_path).convert('RGB')
-        print(f'img: {_img.size}')
+        # print(f'img: {_img.size}')
 
         if self.mode in ["RGB_HHA", "RGBD"]:
             _depth = self.loadDepth(depth_path)
@@ -121,6 +121,7 @@ class SampleLoader():
 
     def transform_ts(self, sample):
 
+        print(f'mean:{self.data_mean} var:{self.data_std}')
         composed_transforms = transforms.Compose([
             tr.FixedResize(size=self.crop_size),
             tr.Darken(self.cfg),

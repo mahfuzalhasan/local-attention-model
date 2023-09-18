@@ -116,6 +116,8 @@ class CityscapesSampleLoader(SampleLoader):
         self.ignore_index = 255
         self.class_map = dict(zip(self.valid_classes, range(self.NUM_CLASSES)))
         print(f'class mapping: {self.class_map}')
+        # self.mode = mode
+        self.normalizationFactors()
 
     def normalizationFactors(self):
         if self.mode == "RGBD":
