@@ -24,7 +24,7 @@ class SampleLoader():
 
     def get_sample(self, img_path, depth_path, lbl_path):
         _img = Image.open(img_path).convert('RGB')
-        # print(f'img: {_img.size}')
+        print(f'img: {_img.size}')
 
         if self.mode in ["RGB_HHA", "RGBD"]:
             _depth = self.loadDepth(depth_path)
