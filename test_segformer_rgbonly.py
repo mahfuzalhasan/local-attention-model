@@ -68,7 +68,7 @@ def Main(parser, cfg, args):
         
         val_loss, val_mean_iou = val_cityscape(epoch, test_loader, model)
         
-if '__name__' == '__main__':
+if __name__ == '__main__':
     print('entering main')
     parser = argparse.ArgumentParser(description="Test cityscapes Loader")
     parser.add_argument('config_file', help='config file path')

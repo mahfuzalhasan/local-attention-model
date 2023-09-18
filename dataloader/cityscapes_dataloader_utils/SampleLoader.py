@@ -121,7 +121,7 @@ class SampleLoader():
 
     def transform_ts(self, sample):
 
-        print(f'mean:{self.data_mean} var:{self.data_std}')
+        # print(f'mean:{self.data_mean} var:{self.data_std}')
         composed_transforms = transforms.Compose([
             tr.FixedResize(size=self.crop_size),
             tr.Darken(self.cfg),
