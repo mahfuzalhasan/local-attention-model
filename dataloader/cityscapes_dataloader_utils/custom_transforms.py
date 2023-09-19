@@ -27,6 +27,9 @@ class Normalize(object):
 
         mask = sample['label']
         mask = np.array(mask).astype(np.float32)
+        # print('################label in Augmentation###########')
+        # print(np.unique(mask))
+        # print('################################################')
 
         depth = sample['depth']
         if not isinstance(depth, list):

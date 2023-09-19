@@ -5,16 +5,18 @@ import torch.nn.functional as F
 from utils.init_func import init_weight
 from utils.load_utils import load_pretrain
 from functools import partial
+import numpy as np
 
 from engine.logger import get_logger
 
 logger = get_logger()
 
 class EncoderDecoder(nn.Module):
-    def __init__(self, cfg=None, criterion=nn.CrossEntropyLoss(reduction='mean', ignore_index=255), norm_layer=nn.BatchNorm2d):
+    def __init__(self, cfg=None, criterion=nn.CrossEntropyLoss(reduction='mean', ignore_index=255), norm_layer=nn.BatchNorm2d, test=False):
         super(EncoderDecoder, self).__init__()
         self.channels = [64, 128, 320, 512]
         self.norm_layer = norm_layer
+        self.test = test
         # import backbone and decoder
         if cfg.backbone == 'swin_s':
             logger.info('Using backbone: Swin-Transformer-small')
@@ -87,7 +89,7 @@ class EncoderDecoder(nn.Module):
             self.decode_head = FCNHead(in_channels=self.channels[-1], kernel_size=3, num_classes=cfg.num_classes, norm_layer=norm_layer)
 
         self.criterion = criterion
-        if self.criterion:
+        if self.criterion and not self.test:
             self.init_weights(cfg, pretrained=cfg.pretrained_model)
     
     def init_weights(self, cfg, pretrained=None):
@@ -121,9 +123,18 @@ class EncoderDecoder(nn.Module):
             out, aux_fm = self.encode_decode(rgb)
         else:
             out = self.encode_decode(rgb)
-            # print(f'output: {out.size()}')
+            # print(f'#############output: {out.size()}')
+            # print(out)
 
+        # print(f'output: {out.size()}')
+        # print('############# label ################## \n ')
+        # label = label.long()
+        # unique_values = torch.unique(label)
+        # print(unique_values)
+        # print('##########################################')
         loss = self.criterion(out, label.long())
+        
+        # print(f'loss:{loss}')
         if self.aux_head:
             loss += self.aux_rate * self.criterion(aux_fm, label.long())
         return loss, out

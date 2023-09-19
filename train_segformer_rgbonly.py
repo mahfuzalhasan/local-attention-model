@@ -138,6 +138,7 @@ def Main(parser, cfg, args):
             optimizer.zero_grad()
             sum_loss = 0
             m_iou_batches = []
+            
             for idx, sample in enumerate(train_loader):
                 imgs = sample['image']
                 gts = sample['label']

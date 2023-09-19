@@ -56,6 +56,8 @@ class CityscapesDataset(data.Dataset):
         img_path, depth_path, lbl_path = self.get_path(index, self.cfg.DATASET.SCRAMBLE_LABELS)
         sample = self.loader.load_sample(img_path, depth_path, lbl_path)
         sample['id'] = img_path
+        # print('************* img path************** \n', img_path)
+        # print('************* img path**************')
         return sample
 
     def get_path(self, index, scramble_labels=False):
@@ -115,7 +117,7 @@ class CityscapesSampleLoader(SampleLoader):
 
         self.ignore_index = 255
         self.class_map = dict(zip(self.valid_classes, range(self.NUM_CLASSES)))
-        print(f'class mapping: {self.class_map}')
+        # print(f'class mapping: {self.class_map}')
         # self.mode = mode
         self.normalizationFactors()
 
@@ -136,8 +138,12 @@ class CityscapesSampleLoader(SampleLoader):
 
     def getLabels(self, lbl_path):
         if self.cfg.DATASET.ANNOTATION_TYPE == 'semantic':
+            # print('appearing in label mapping')
             _tmp = np.array(Image.open(lbl_path), dtype=np.uint8)
+            # print(f'$$$$$$$$$size:{_tmp.shape} unique values:{np.unique(_tmp)} $$$$$$$$$$$$')
+            
             _tmp = self.encode_segmap(_tmp)
+            # print(f'$$$$$$$$$ unique values after mapping:{np.unique(_tmp)} $$$$$$$$$$$$')
             _target = Image.fromarray(_tmp)
         elif self.cfg.DATASET.ANNOTATION_TYPE == 'instance':
             _tmp = np.array(Image.open(lbl_path))

@@ -39,12 +39,13 @@ C.eval_source = osp.join(C.dataset_path, "test.txt")
 C.is_test = False
 C.num_train_imgs = 2975
 C.num_eval_imgs = 654
-C.num_classes = 19
+C.num_classes = 19  #for cityscape
+##### for NYudV2
 C.class_names =  ['wall','floor','cabinet','bed','chair','sofa','table','door','window','bookshelf','picture','counter','blinds',
     'desk','shelves','curtain','dresser','pillow','mirror','floor mat','clothes','ceiling','books','refridgerator',
     'television','paper','towel','shower curtain','box','whiteboard','person','night stand','toilet',
     'sink','lamp','bathtub','bag','otherstructure','otherfurniture','otherprop']
-
+#############
 """Image Config"""
 C.background = 255
 C.image_height = 513
@@ -78,8 +79,8 @@ C.bn_momentum = 0.1
 C.train_print_stats = 50
 C.val_print_stats = 100
 #C.device_ids = [0] # for mahdi (lab-pc)
-C.device_ids = [0, 1] # for mahdi (newton)
-#C.device_ids = [0, 1, 2, 3] # for sakin
+# C.device_ids = [0, 1] # for mahdi (newton)
+C.device_ids = [0, 1, 2, 3] # for sakin
 C.resume_train = False 
 C.resume_model_path = osp.join(C.root_dir, 'Results/saved_models/07-10-23_2314/model_330.pth')
 

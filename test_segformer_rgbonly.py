@@ -3,7 +3,7 @@ import os
 import sys
 import time
 import argparse
-from tqdm import tqdm
+# import tqdm
 from datetime import datetime
 import numpy as np
 
@@ -47,17 +47,18 @@ def Main(parser, cfg, args):
         
         criterion = nn.CrossEntropyLoss(reduction='mean', ignore_index=config.background)
 
-        model = segmodel(cfg=config, criterion=criterion, norm_layer=nn.BatchNorm2d)
+        model = segmodel(cfg=config, criterion=criterion, norm_layer=nn.BatchNorm2d, test=True)
         model = nn.DataParallel(model, device_ids = config.device_ids)
         model.to(f'cuda:{model.device_ids[0]}', non_blocking=True)
 
 
         
         # <----------------- load model ----------------->
-        saved_model_path = os.path.join(config.checkpoint_dir, "09-12-23_1501", 'model_350.pth')
+        saved_model_path = os.path.join(config.checkpoint_dir, "09-12-23_1501", 'model_400.pth')
         
         state_dict = torch.load(saved_model_path)
         model.load_state_dict(state_dict['model'], strict=True)
+        print(f'model loaded')
         epoch = state_dict['epoch']
         
         # model.eval()
