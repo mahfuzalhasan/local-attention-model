@@ -13,13 +13,15 @@ cfg = C
 C.seed = 12345
 
 remoteip = os.popen('pwd').read()
-C.root_dir = os.path.abspath(os.path.join(os.getcwd(), './'))
+#C.root_dir = os.path.abspath(os.path.join(os.getcwd(), './'))
+C.root_dir = os.getcwd()
 C.abs_dir = osp.realpath(".")
 
 # Dataset config
 """Dataset Path"""
 C.dataset_name = 'NYUDepthv2'
-C.dataset_path = r'./data/NYUDepthv2'
+#C.dataset_path = r'./data/NYUDepthv2'
+C.dataset_path = osp.join(C.root_dir, 'data/NYUDepthv2')
 C.rgb_root_folder = osp.join(C.dataset_path, 'RGB')
 C.rgb_format = '.jpg'
 C.gt_root_folder = osp.join(C.dataset_path, 'Label')
@@ -50,10 +52,8 @@ C.norm_std = np.array([0.229, 0.224, 0.225])
 
 """ Settings for network, this would be different for each kind of model"""
 C.backbone = 'mit_b2' # Remember change the path below.
-#C.pretrained_model = C.root_dir + '/pretrained/segformer/mit_b2.pth'
+C.pretrained_model = osp.join(C.root_dir, 'pretrained/mit_b2.pth')
 #C.pretrained_model = "../../Results/saved_models/NYUDV2_CMX+Segformer-B2.pth"
-# C.pretrained_model = "./Results/saved_models/segformer/mit_b2.pth"
-C.pretrained_model = None
 C.decoder = 'MLPDecoder'
 C.decoder_embed_dim = 512
 C.optimizer = 'AdamW'
@@ -73,6 +73,11 @@ C.warm_up_epoch = 10
 C.fix_bias = True
 C.bn_eps = 1e-3
 C.bn_momentum = 0.1
+C.print_stats = 30
+C.device_ids = [0, 1] # for mahdi
+#C.device_ids = [0, 1, 2, 3] # for sakin
+C.resume_train = False 
+C.resume_model_path = osp.join(C.root_dir, 'Results/saved_models/07-10-23_2314/model_330.pth')
 
 """Eval Config"""
 C.eval_iter = 25
@@ -83,7 +88,7 @@ C.eval_crop_size = [480, 640] # [height width]
 
 """Store Config"""
 C.checkpoint_start_epoch = 250
-C.checkpoint_step = 25
+C.checkpoint_step = 5
 
 """Path Config"""
 def add_path(path):
@@ -91,10 +96,10 @@ def add_path(path):
         sys.path.insert(0, path)
 add_path(osp.join(C.root_dir))
 
-C.log_dir = "../../Results/logs"
+C.log_dir = "./Results/logs"
 C.tb_dir = osp.abspath(osp.join(C.log_dir, "tb"))
 C.log_dir_link = C.log_dir
-C.checkpoint_dir = "../../Results/saved_models/segformer"
+C.checkpoint_dir = "./Results/saved_models"
 
 exp_time = time.strftime('%Y_%m_%d_%H_%M_%S', time.localtime())
 C.log_file = C.log_dir + '/log_' + exp_time + '.log'

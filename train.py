@@ -4,6 +4,7 @@ import sys
 import time
 import argparse
 from tqdm import tqdm
+from datetime import datetime
 
 import torch
 import torch.nn as nn
@@ -28,9 +29,14 @@ logger = get_logger()
 
 os.environ['MASTER_PORT'] = '169710'
 
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_dir)
+
 # print("parser: ",parser)
 
 with Engine(custom_parser=parser) as engine:
+    run_id = datetime.today().strftime('%m-%d-%y_%H%M')
+    print(f'$$$$$$$$$$$$$ run_id:{run_id} $$$$$$$$$$$$$')
     args = parser.parse_args()
 
     cudnn.benchmark = True
@@ -43,12 +49,17 @@ with Engine(custom_parser=parser) as engine:
 
     # data loader
     train_loader, train_sampler = get_train_loader(engine, RGBXDataset)
+    print('train dataloader: ',len(train_loader))
 
-    if (engine.distributed and (engine.local_rank == 0)) or (not engine.distributed):
-        tb_dir = config.tb_dir + '/{}'.format(time.strftime("%b%d_%d-%H-%M", time.localtime()))
-        generate_tb_dir = config.tb_dir + '/tb'
-        tb = SummaryWriter(log_dir=tb_dir)
-        engine.link_tb(tb_dir, generate_tb_dir)
+    # if (engine.distributed and (engine.local_rank == 0)) or (not engine.distributed):
+    #     tb_dir = config.tb_dir + '/{}'.format(time.strftime("%b%d_%d-%H-%M", time.localtime()))
+    #     generate_tb_dir = config.tb_dir + '/tb'
+    #     tb = SummaryWriter(log_dir=tb_dir)
+    #     engine.link_tb(tb_dir, generate_tb_dir)
+    save_log = os.path.join(config.log_dir, str(run_id))
+    if not os.path.exists(save_log):
+        os.makedirs(save_log)
+    writer = SummaryWriter(save_log)
 
     # config network and criterion
     criterion = nn.CrossEntropyLoss(reduction='mean', ignore_index=config.background)
@@ -77,6 +88,7 @@ with Engine(custom_parser=parser) as engine:
 
     # config lr policy
     total_iteration = config.nepochs * config.niters_per_epoch
+    # 6e-5, 0.9, 500*100 = 50000, 10000
     lr_policy = WarmUpPolyLR(base_lr, config.lr_power, total_iteration, config.niters_per_epoch * config.warm_up_epoch)
 
     if engine.distributed:
@@ -90,7 +102,8 @@ with Engine(custom_parser=parser) as engine:
                                             output_device=engine.local_rank, find_unused_parameters=False)
     else:
         print("multigpu training")
-        model = nn.DataParallel(model, device_ids = [1,2,3])
+        print('device ids: ',config.device_ids)
+        model = nn.DataParallel(model, device_ids = config.device_ids)
         model.to(f'cuda:{model.device_ids[0]}', non_blocking=True)
         # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         # model.to(device)
@@ -100,13 +113,22 @@ with Engine(custom_parser=parser) as engine:
     # if engine.continue_state_object:
     #     engine.restore_checkpoint()
 
+    starting_epoch = 1
+    if config.resume_train:
+        print('Loading model to resume train')
+        state_dict = torch.load(config.resume_model_path)
+        model.load_state_dict(state_dict['model'])
+        optimizer.load_state_dict(state_dict['optimizer'])
+        starting_epoch = state_dict['epoch']
+        print('resuming training with model: ', config.resume_model_path)
+
     optimizer.zero_grad()
     model.train()
-    logger.info('begin trainning:')
+    logger.info('begin training:')
     
     # total epoch
     # for epoch in range(engine.state.epoch, config.nepochs+1):
-    for epoch in range(100):
+    for epoch in range(starting_epoch, config.nepochs):
         if engine.distributed:
             train_sampler.set_epoch(epoch)
         bar_format = '{desc}[{elapsed}<{remaining},{rate_fmt}]'
@@ -119,8 +141,9 @@ with Engine(custom_parser=parser) as engine:
 
         for idx in pbar:
             engine.update_iteration(epoch, idx)
-
-            minibatch = dataloader.next()
+            #print('epoch: ', epoch, 'idx: ', idx)
+            #print(len(dataloader))
+            minibatch = next(dataloader) #minibatch = dataloader.next()
             imgs = minibatch['data']
             gts = minibatch['label']
             modal_xs = minibatch['modal_x']
@@ -136,8 +159,10 @@ with Engine(custom_parser=parser) as engine:
 
             aux_rate = 0.2
             loss = model(imgs, modal_xs, gts)
+            #print('loss size: ',loss.size())
 
-            loss = torch.mean(loss)
+            # mean over multi-gpu result
+            loss = torch.mean(loss) 
 
             # print("loss: ",loss)
 
@@ -166,20 +191,34 @@ with Engine(custom_parser=parser) as engine:
                 print_str = 'Epoch {}/{}'.format(epoch, config.nepochs) \
                         + ' Iter {}/{}:'.format(idx + 1, config.niters_per_epoch) \
                         + ' lr=%.4e' % lr \
-                        + ' loss=%.4f total_loss=%.4f' % (loss, (sum_loss / (idx + 1)))
+                        + ' loss=%.4f total_loss=%.4f' % (loss, (sum_loss / (idx + 1)))+'\n'
 
             del loss
-            pbar.set_description(print_str, refresh=False)
-        
-        if (engine.distributed and (engine.local_rank == 0)) or (not engine.distributed):
-            tb.add_scalar('train_loss', sum_loss / len(pbar), epoch)
+            if idx % config.print_stats == 0:
+                #pbar.set_description(print_str, refresh=True)
+                print(f'{print_str}')
+
+        print(f"########## epoch:{epoch} train_loss:{sum_loss/len(pbar)}############")
+        writer.add_scalar('train_loss', sum_loss / len(pbar), epoch)
+        # if (engine.distributed and (engine.local_rank == 0)) or (not engine.distributed):
+        #     tb.add_scalar('train_loss', sum_loss / len(pbar), epoch)
 
         if (epoch >= config.checkpoint_start_epoch) and (epoch % config.checkpoint_step == 0) or (epoch == config.nepochs):
-            if engine.distributed and (engine.local_rank == 0):
-                engine.save_and_link_checkpoint(config.checkpoint_dir,
-                                                config.log_dir,
-                                                config.log_dir_link)
-            elif not engine.distributed:
-                engine.save_and_link_checkpoint(config.checkpoint_dir,
-                                                config.log_dir,
-                                                config.log_dir_link)
+            # if engine.distributed and (engine.local_rank == 0):
+            #     engine.save_and_link_checkpoint(config.checkpoint_dir,
+            #                                     config.log_dir,
+            #                                     config.log_dir_link)
+            # elif not engine.distributed:
+            #     engine.save_and_link_checkpoint(config.checkpoint_dir,
+            #                                     config.log_dir,
+            #                                     config.log_dir_link)
+            save_dir = os.path.join(config.checkpoint_dir, str(run_id))
+            if not os.path.exists(save_dir):
+                os.makedirs(save_dir)
+            save_file_path = os.path.join(save_dir, 'model_{}.pth'.format(epoch))
+            states = {
+                'epoch': epoch,
+                'model': model.state_dict(),
+                'optimizer': optimizer.state_dict()
+            }
+            torch.save(states, save_file_path)

@@ -5,6 +5,7 @@ from torch.utils import data
 import random
 import scipy.io as sio
 import os
+import sys
 
 from config import config
 from utils.transforms import generate_random_crop_pos, random_crop_pad_to_shape, normalize
@@ -60,9 +61,9 @@ class ValPre(object):
         return rgb, gt, modal_x
 
 def get_train_loader(engine, dataset):
-
-    data_dir = r'./data/nyudv2'
-    splits = sio.loadmat(os.path.join(data_dir,'splits.mat'))
+    
+    splits_path = os.path.join(config.dataset_path,'splits.mat') 
+    splits = sio.loadmat(splits_path)
 
     train = splits['trainNdxs']
     trainIds = []
@@ -90,7 +91,7 @@ def get_train_loader(engine, dataset):
     is_shuffle = True
     batch_size = config.batch_size
 
-    if engine.distributed:
+    if engine.distributed:  # False
         print("distributed training: ",engine.distributed)
         train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
         batch_size = config.batch_size // engine.world_size
@@ -105,3 +106,4 @@ def get_train_loader(engine, dataset):
                                    sampler=train_sampler)
 
     return train_loader, train_sampler
+
