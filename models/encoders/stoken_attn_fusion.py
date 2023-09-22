@@ -114,7 +114,7 @@ class StokenAttention(nn.Module):
         
         ### for the sake of carrying info from large token space to small token space
         token_large_attn = F.adaptive_avg_pool2d(x_l, (hh, ww)) # (B, C, hh, ww)
-        stoken_features = token_small_attn + token_large_attn
+        # stoken_features = token_small_attn + token_large_attn
 
         pixel_features = x_l.reshape(B, C, hh, h, ww, w).permute(0, 2, 4, 3, 5, 1).reshape(B, hh*ww, h*w, C)
         #print(f'token features:{stoken_features.shape}  pixel f:{pixel_features.shape}')

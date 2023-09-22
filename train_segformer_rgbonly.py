@@ -186,7 +186,7 @@ def Main(parser, cfg, args):
             train_mean_iou = np.mean(np.asarray(m_iou_batches))
             print(f"########## epoch:{epoch} train_loss:{train_loss} t_miou:{train_mean_iou}############")
             writer.add_scalar('train_loss', train_loss, epoch)
-            writer.add_scalar('train_loss', train_mean_iou, epoch)
+            writer.add_scalar('train_m_iou', train_mean_iou, epoch)
 
             #save model every 10 epochs before checkpoint_start_epoch
             if (epoch < config.checkpoint_start_epoch) and (epoch % (config.checkpoint_step*2) == 0):
