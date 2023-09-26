@@ -107,7 +107,7 @@ def val_cityscape(epoch, val_loader, model):
             # compute_score(confusionMatrix, labeled, correct)
             # m_iou_batches.append(m_iou)
 
-            # sum_loss += loss
+            sum_loss += loss
 
             # print_str = 'Epoch {}/{}'.format(epoch, config.nepochs) \
             #         + ' Iter {}/{}:'.format(idx + 1, config.niters_per_epoch) \
@@ -118,13 +118,13 @@ def val_cityscape(epoch, val_loader, model):
             #     #pbar.set_description(print_str, refresh=True)
             #     print(f'{print_str}')
 
-        # val_loss = sum_loss/len(val_loader)
+        val_loss = sum_loss/len(val_loader)
         result_dict = compute_metric(all_results)
-        print('all unique class values: ', list(set(unique_values)))
+        # print('all unique class values: ', list(set(unique_values)))
 
         print(f"\n $$$$$$$ evaluating in epoch:{epoch} $$$$$$$ \n")
         print('result: ',result_dict)
         # val_mean_iou = np.mean(np.asarray(m_iou_batches))
-        print(f"########## epoch:{epoch} mean_iou:{result_dict['mean_iou']} iou:############")
+        print(f"########## epoch:{epoch} mean_iou:{result_dict['mean_iou']} ############")
 
         return val_loss, val_mean_iou
