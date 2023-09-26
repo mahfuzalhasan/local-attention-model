@@ -72,7 +72,7 @@ class Fold(nn.Module):
         return x
 
 class StokenAttention(nn.Module):
-    def __init__(self, dim, sp_stoken_size, lp_stoken_size, n_iter=1, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0.):
+    def __init__(self, dim, sp_stoken_size, lp_stoken_size = None, n_iter=1, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0.):
         super().__init__()
         
         self.n_iter = n_iter
@@ -88,35 +88,47 @@ class StokenAttention(nn.Module):
        
     ## Attention from larger patch --> x_l
     # Attention from smaller patch --> x_s
-    def stoken_forward(self, x_s, x_l):
-        '''
-           x: (B, C, H, W)
-        '''
-
-        B, C, H0, W0 = x_l.shape
-        h, w = self.lp_stoken_size
-        #### This calculation is preserved from super-token sampling
-        # #print(f'x shape:{x.shape}   token size:{self.stoken_size} itr:{self.n_iter}')
+    def sample_resizing(self, x, token_size):
+        B, C, H0, W0 = x.shape
+        h, w = token_size
         pad_l = pad_t = 0
         pad_r = (w - W0 % w) % w
         pad_b = (h - H0 % h) % h
         if pad_r > 0 or pad_b > 0:
-            xl = F.pad(x_l, (pad_l, pad_r, pad_t, pad_b))
-            
-        _, _, H, W = x_l.shape
+            x = F.pad(x, (pad_l, pad_r, pad_t, pad_b))
         
-        hh, ww = H//h, W//w
-
-        hs, ws = self.sp_stoken_size
-        token_small_attn = F.avg_pool2d(x_s, (hs, ws))
-        token_small_attn = F.avg_pool2d(token_small_attn, (2, 2))
-        #print(f'sf:{token_small_attn.shape}')
+        return x, pad_r, pad_b
         
-        ### for the sake of carrying info from large token space to small token space
-        token_large_attn = F.adaptive_avg_pool2d(x_l, (hh, ww)) # (B, C, hh, ww)
-        # stoken_features = token_small_attn + token_large_attn
+    def stoken_forward(self, x_s, x_l):
+        '''
+           x: (B, C, H, W)
+        '''
+        if self.lp_stoken_size is not None:
+            hs, ws = self.sp_stoken_size
+            token_small_attn = F.avg_pool2d(x_s, (hs, ws))
+            token_small_attn = F.avg_pool2d(token_small_attn, (2, 2))
 
-        pixel_features = x_l.reshape(B, C, hh, h, ww, w).permute(0, 2, 4, 3, 5, 1).reshape(B, hh*ww, h*w, C)
+            ### for the sake of carrying info from large token space to small token space
+            B, C, H0, W0 = x_l.shape
+            x_l, pad_r, pad_b = self.sample_resizing(x_l, self.lp_stoken_size)
+            _, _, H, W = x_l.shape
+            h, w = self.lp_stoken_size
+            hh, ww = H//h, W//w
+            token_large_attn = F.adaptive_avg_pool2d(x_l, (hh, ww)) # (B, C, hh, ww)
+            stoken_features = token_small_attn + token_large_attn
+            ##########################################################################
+            pixel_features = x_l.reshape(B, C, hh, h, ww, w).permute(0, 2, 4, 3, 5, 1).reshape(B, hh*ww, h*w, C)
+        else:   # For first attention
+            B, C, H0, W0 = x_s.shape
+            x_s, pad_r, pad_b = self.sample_resizing(x_s, self.sp_stoken_size)
+            _, _, H, W = x_s.shape
+            h, w = self.sp_stoken_size
+            hh, ww = H//h, W//w
+            stoken_features = F.adaptive_avg_pool2d(x_s, (hh, ww))
+            pixel_features = x_s.reshape(B, C, hh, h, ww, w).permute(0, 2, 4, 3, 5, 1).reshape(B, hh*ww, h*w, C)
+
+        
+
         #print(f'token features:{stoken_features.shape}  pixel f:{pixel_features.shape}')
         with torch.no_grad():
             for idx in range(self.n_iter):

@@ -32,7 +32,8 @@ class MultiScaleAttention(nn.Module):
             self.norm = nn.LayerNorm(dim)
 
         # self.attn_fusion = iAFF(dim)
-        self.attn_fusion = []
+        self.attn_fusion = [StokenAttentionLayer(dim, n_iter=1, 
+                            sp_stoken_size=(local_region_shape[0], local_region_shape[0]), lp_stoken_size=None)]
         for i in range(len(local_region_shape)-1):
             sp_stoken_size = (local_region_shape[i], local_region_shape[i])
             lp_stoken_size = (local_region_shape[i+1], local_region_shape[i+1])
@@ -107,15 +108,16 @@ class MultiScaleAttention(nn.Module):
 
     def fuse_ms_attn_map(self, A, H, W):
         B, N, C = A[0].shape
-        output_small_patched_attn = A[1].permute(0, 2, 1).contiguous().view(B, C, H, W)
-        global_attn = A[0].permute(0, 2, 1).contiguous().view(B, C, H, W)
+        output_small_patched_attn = A[0].permute(0, 2, 1).contiguous().view(B, C, H, W)
+        output_small_patched_attn = self.attn_fusion[0](output_small_patched_attn, output_small_patched_attn)
+        # global_attn = A[0].permute(0, 2, 1).contiguous().view(B, C, H, W)
         ##print('shapes: ', output.shape, global_attn.shape)
-        for i in range(2,len(A)):
-            idx = i - 2
-            output_small_patched_attn = self.attn_fusion[idx](output_small_patched_attn, A[i].permute(0, 2, 1).contiguous().view(B, C, H, W))
-        output = self.global_fusion(output_small_patched_attn, global_attn)
+        for i in range(1,len(A)):
+            # idx = i - 1
+            output_small_patched_attn = self.attn_fusion[i](output_small_patched_attn, A[i].permute(0, 2, 1).contiguous().view(B, C, H, W))
+        # output = self.global_fusion(output_small_patched_attn, global_attn)
         # print('final fused: ',output.shape)
-        return output
+        return output_small_patched_attn
 
     def forward(self, x, H, W):
         ####print('!!!!!!!!!!!!attention head: ',self.num_heads, ' !!!!!!!!!!')
@@ -125,23 +127,23 @@ class MultiScaleAttention(nn.Module):
 
         # This reduces dimension of k and v
         # 120, 160 --Flatten--> 19200--FNN--> 300
-        if self.sr_ratio > 1:       
-            x_ = x.permute(0, 2, 1).reshape(B, C, H, W) 
-            x_ = self.sr(x_).reshape(B, C, -1).permute(0, 2, 1) 
-            x_ = self.norm(x_)
-            kv = self.kv(x_).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4) 
-        else:
-            kv = self.kv(x).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4) 
-        k_full, v_full = kv[0], kv[1]
-        ###print(f'global q:{q.shape} k:{k_full.shape} v:{v_full.shape}')
-        a_1 = self.attention(q, k_full, v_full)
-        ###print(f'full scale attn:{a_1.shape}')
-        a_1 = a_1.transpose(1, 2)
-        a_1 = a_1.reshape(B, N, C)
-        a_1 = self.proj(a_1)
-        a_1 = self.proj_drop(a_1)
+        # if self.sr_ratio > 1:       
+        #     x_ = x.permute(0, 2, 1).reshape(B, C, H, W) 
+        #     x_ = self.sr(x_).reshape(B, C, -1).permute(0, 2, 1) 
+        #     x_ = self.norm(x_)
+        #     kv = self.kv(x_).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4) 
+        # else:
+        #     kv = self.kv(x).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4) 
+        # k_full, v_full = kv[0], kv[1]
+        # ###print(f'global q:{q.shape} k:{k_full.shape} v:{v_full.shape}')
+        # a_1 = self.attention(q, k_full, v_full)
+        # ###print(f'full scale attn:{a_1.shape}')
+        # a_1 = a_1.transpose(1, 2)
+        # a_1 = a_1.reshape(B, N, C)
+        # a_1 = self.proj(a_1)
+        # a_1 = self.proj_drop(a_1)
 
-        A.append(a_1)
+        # A.append(a_1)
 
         kv = self.kv(x).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         k, v = kv[0], kv[1]
