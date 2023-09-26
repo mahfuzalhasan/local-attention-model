@@ -99,11 +99,11 @@ class StokenAttention(nn.Module):
         
         return x, pad_r, pad_b
         
-    def stoken_forward(self, x_s, x_l):
+    def stoken_forward(self, x_s, x_l=None):
         '''
            x: (B, C, H, W)
         '''
-        if self.lp_stoken_size is not None:
+        if x_l is not None:
             hs, ws = self.sp_stoken_size
             token_small_attn = F.avg_pool2d(x_s, (hs, ws))
             token_small_attn = F.avg_pool2d(token_small_attn, (2, 2))
@@ -124,6 +124,7 @@ class StokenAttention(nn.Module):
             _, _, H, W = x_s.shape
             h, w = self.sp_stoken_size
             hh, ww = H//h, W//w
+            
             stoken_features = F.adaptive_avg_pool2d(x_s, (hh, ww))
             pixel_features = x_s.reshape(B, C, hh, h, ww, w).permute(0, 2, 4, 3, 5, 1).reshape(B, hh*ww, h*w, C)
 
@@ -181,7 +182,10 @@ class StokenAttention(nn.Module):
 
     def forward(self, xs, xl):
         # if self.stoken_size[0] > 1 or self.stoken_size[1] > 1:
-        return self.stoken_forward(xs, xl)
+        if self.lp_stoken_size is not None:
+            return self.stoken_forward(xs, xl)
+        else:
+            return self.stoken_forward(xs)
 
 class LayerNorm2d(nn.Module):
     def __init__(self, dim):

@@ -47,13 +47,9 @@ def compute_metric(results):
         correct += d['correct']
         labeled += d['labeled']
         count += 1
-    
     iou, mean_IoU, _, freq_IoU, mean_pixel_acc, pixel_acc = compute_score(hist, correct, labeled)
     print(f'iou:{iou} miou:{mean_IoU}')
     result_dict = dict(mean_iou=mean_IoU, freq_iou=freq_IoU, mean_pixel_acc=mean_pixel_acc)
-    
-    # result_line = print_iou(iou, freq_IoU, mean_pixel_acc, pixel_acc,
-    #                         dataset.class_names, show_no_back=False)
     return result_dict
 
 def val_cityscape(epoch, val_loader, model):
@@ -62,29 +58,26 @@ def val_cityscape(epoch, val_loader, model):
     m_iou_batches = []
     all_results = []
     unique_values = []
-    
     with torch.no_grad():
         for idx, sample in enumerate(val_loader):
-
-            
             imgs = sample['image']
             gts = sample['label']
             imgs = imgs.to(f'cuda:{model.device_ids[0]}', non_blocking=True)
             gts = gts.to(f'cuda:{model.device_ids[0]}', non_blocking=True)  
 
-            u_val = torch.unique(gts)
-            u_val = u_val.detach().cpu().numpy()
-            u_val = list(u_val)
+            # u_val = torch.unique(gts)
+            # u_val = u_val.detach().cpu().numpy()
+            # u_val = list(u_val)
             
-            if len(u_val) > 1:
-                print('path: ',sample['id'])
-                print('uval for sample: ',u_val)
+            # if len(u_val) > 1:
+            #     print('path: ',sample['id'])
+            #     print('uval for sample: ',u_val)
 
-            unique_values.extend(u_val)
+            # unique_values.extend(u_val)
 
-            if idx%500 == 0:
-                print(f'{idx}th sample')
-                print('unique_values: ',len(unique_values))
+            # if idx%500 == 0:
+            #     print(f'{idx}th sample')
+            #     print('unique_values: ',len(unique_values))
 
 
             aux_rate = 0.2

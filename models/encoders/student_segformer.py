@@ -170,6 +170,7 @@ class OverlapPatchEmbed(nn.Module):
     def forward(self, x):
         # B C H W
         x = self.proj(x)
+        # print('x after proj: ',x.shape)
         _, _, H, W = x.shape
         x = x.flatten(2).transpose(1, 2)
         # B H*W/16 C
@@ -316,12 +317,17 @@ class RGBXTransformer(nn.Module):
         """
         x_rgb: B x N x H x W
         """
+        # print('input: ',x_rgb.shape)
         B = x_rgb.shape[0]
         outs = []
         outs_fused = []
 
         # stage 1
         x_rgb, H, W = self.patch_embed1(x_rgb)
+
+        # print('tokenization: ',x_rgb.shape)
+
+        # exit()
         # B H*W/16 C
         for i, blk in enumerate(self.block1):
             x_rgb = blk(x_rgb, H, W)
@@ -365,9 +371,6 @@ class RGBXTransformer(nn.Module):
 
     def forward(self, x_rgb):
         out = self.forward_features(x_rgb)
-        # print('encoded: ',encoded.shape)
-        # out = self.head(encoded)
-        # print('out: ',out.shape)
         return out
 
 

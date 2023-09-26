@@ -147,12 +147,14 @@ class MultiScaleAttention(nn.Module):
 
         kv = self.kv(x).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         k, v = kv[0], kv[1]
-        ###print(f'new k:{k.shape} new v:{v.shape} q:{q.shape}')
+        # print(f'new k:{k.shape} new v:{v.shape} q:{q.shape}')
+        # print('############################################')
         for rg_shp in self.local_region_shape:
             q_patch = self.patchify(q, H, W, rg_shp)
             k_patch = self.patchify(k, H, W, rg_shp)
             v_patch = self.patchify(v, H, W, rg_shp)
-            #print(f'patchified q:{q_patch.shape}, k:{k_patch.shape}, v:{v_patch.shape}')
+            # print('local region shape: ',rg_shp)
+            # print(f'patchified q:{q_patch.shape}, k:{k_patch.shape}, v:{v_patch.shape}')
             patched_attn = self.attention(q_patch, k_patch, v_patch)
             #print('patched attention output: ',patched_attn.shape)
             #exit()
@@ -196,7 +198,7 @@ if __name__=="__main__":
     # ms_attention = nn.DataParallel(ms_attention, device_ids = [0,1])
     # ms_attention.to(f'cuda:{ms_attention.device_ids[0]}', non_blocking=True)
 
-    f = torch.randn(B, 19200, 32).to(device)
+    f = torch.randn(B, 65536, 64).to(device)
     ##print(f'input to multiScaleAttention:{f.shape}')
-    y = ms_attention(f, 120, 160)
+    y = ms_attention(f, 1024, 1024)
     ##print('output: ',y.shape)
