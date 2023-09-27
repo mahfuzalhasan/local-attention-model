@@ -4,7 +4,10 @@ import torch
 import numpy as np
 
 from PIL import Image
-from .segbase import SegmentationDataset
+
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from dataloader.segbase import SegmentationDataset
 
 
 class ADE20KSegmentation(SegmentationDataset):
@@ -34,14 +37,14 @@ class ADE20KSegmentation(SegmentationDataset):
     >>>     trainset, 4, shuffle=True,
     >>>     num_workers=4)
     """
-    BASE_DIR = 'ADEChallengeData2016'
+    BASE_DIR = 'images'
     NUM_CLASS = 150
 
-    def __init__(self, root='../datasets/ade', split='test', mode=None, transform=None, **kwargs):
+    def __init__(self, root='../data/ade20k', split='train', mode=None, transform=None, **kwargs):
         super(ADE20KSegmentation, self).__init__(root, split, mode, transform, **kwargs)
         root = os.path.join(root, self.BASE_DIR)
-        assert os.path.exists(root), "Please setup the dataset using ../datasets/ade20k.py"
-        self.images, self.masks = _get_ade20k_pairs(root, split)
+        assert os.path.exists(root), "{root} does not exist. Please fix the dataset path."
+        self.images, self.masks = _get_ade20k_pairs(root, split) # TODO: fix annotation path for our setup . What does this return? ->
         assert (len(self.images) == len(self.masks))
         if len(self.images) == 0:
             raise RuntimeError("Found 0 images in subfolders of:" + root + "\n")
@@ -148,25 +151,47 @@ def _get_ade20k_pairs(folder, mode='train'):
     img_paths = []
     mask_paths = []
     if mode == 'train':
-        img_folder = os.path.join(folder, 'images/training')
-        mask_folder = os.path.join(folder, 'annotations/training')
+        root_dir = os.path.join(folder, 'training')
+        assert os.path.exists(root_dir), "{root_dir} does not exist. Please fix train path."
     else:
-        img_folder = os.path.join(folder, 'images/validation')
-        mask_folder = os.path.join(folder, 'annotations/validation')
-    for filename in os.listdir(img_folder):
+        root_dir = os.path.join(folder, 'validation')
+        assert os.path.exists(root_dir), "{root_dir} does not exist. Please fix val path."
+        
+    for filename in os.listdir(root_dir):
         basename, _ = os.path.splitext(filename)
-        if filename.endswith(".jpg"):
-            imgpath = os.path.join(img_folder, filename)
-            maskname = basename + '.png'
-            maskpath = os.path.join(mask_folder, maskname)
-            if os.path.isfile(maskpath):
-                img_paths.append(imgpath)
-                mask_paths.append(maskpath)
-            else:
-                print('cannot find the mask:', maskpath)
+        file_path = os.path.join(root_dir, filename)
+        
+        '''
+        -- image path should be like this: ../data/ade20k/images/training/**/**/ADE_train_00000001.jpg
+        -- mask path should be like this: ../data/ade20k/images/training/**/**/ADE_train_00000001*seg.png
+        - file_path should be like this: ../data/ade20k/images/training/**/**/
+        '''
+        
+        for scene in os.listdir(file_path):
+            scene_path = os.path.join(file_path, scene)
+            for filename in os.listdir(scene_path):
+                if filename.endswith(".jpg"):
+                    imgpath = os.path.join(scene_path, filename)
+                    basename, _ = os.path.splitext(imgpath)
+                    maskpath = basename + '_seg.png'
 
+                    if os.path.isfile(maskpath):
+                        img_paths.append(imgpath)
+                        mask_paths.append(maskpath)
+                    else:
+                        print('cannot find the mask:', maskpath)
+
+        
+    # print(f'img_paths: {len(img_paths)}')
+    # print(f'mask_paths: {len(mask_paths)}')
+    '''
+    train img+mask pair count: 25574 
+    val img+mask pair count: 2000 
+    '''
     return img_paths, mask_paths
 
 
 if __name__ == '__main__':
-    train_dataset = ADE20KSegmentation()
+    # train_dataset = ADE20KSegmentation()
+    train_dataset = ADE20KSegmentation(split='val')
+    
