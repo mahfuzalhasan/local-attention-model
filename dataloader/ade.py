@@ -192,6 +192,6 @@ def _get_ade20k_pairs(folder, mode='train'):
 
 
 if __name__ == '__main__':
-    # train_dataset = ADE20KSegmentation()
-    train_dataset = ADE20KSegmentation(split='val')
+    train_dataset = ADE20KSegmentation()
+    # train_dataset = ADE20KSegmentation(split='val')
     
