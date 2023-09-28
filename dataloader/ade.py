@@ -194,4 +194,9 @@ def _get_ade20k_pairs(folder, mode='train'):
 if __name__ == '__main__':
     train_dataset = ADE20KSegmentation()
     # train_dataset = ADE20KSegmentation(split='val')
+
+    img, mask, path = train_dataset.__getitem__(0)
+    print(f'img: {img.shape}')
+    print(f'mask: {mask.shape}')
+    print(f'path: {path}')
     
