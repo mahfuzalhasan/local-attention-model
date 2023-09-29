@@ -4,6 +4,7 @@ import torch
 import numpy as np
 
 from PIL import Image
+import matplotlib.pyplot as plt
 
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -195,8 +196,15 @@ if __name__ == '__main__':
     train_dataset = ADE20KSegmentation()
     # train_dataset = ADE20KSegmentation(split='val')
 
-    img, mask, path = train_dataset.__getitem__(0)
+    img, mask, path = train_dataset.__getitem__(1)
     print(f'img: {img.shape}')
     print(f'mask: {mask.shape}')
     print(f'path: {path}')
+
+    fig, (ax1, ax2) = plt.subplots(1, 2)
+    ax1.imshow(img)
+    ax1.set_title('Image')
+    ax2.imshow(mask)
+    ax2.set_title('Mask')
+    plt.show()
     
