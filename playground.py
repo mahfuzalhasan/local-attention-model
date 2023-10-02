@@ -73,33 +73,33 @@
 # # At this point, 'result' will contain the element-wise multiplication of each 4x4 patch of M
 # # with all 4x4 patches from the corresponding 8x8 patch of N.
 import numpy as np
-s_y = -40
-s_x = 320
-e_y = 600
-e_x = 800
+# s_y = -40
+# s_x = 320
+# e_y = 600
+# e_x = 800
 
-img_pad = np.zeros((600, 800, 3))
+# img_pad = np.zeros((600, 800, 3))
 
-img_sub = img_pad[s_y:e_y, s_x: e_x, :]
+# img_sub = img_pad[s_y:e_y, s_x: e_x, :]
 
-print('img sub: ',img_sub.shape)
+# print('img sub: ',img_sub.shape)
 import torch
 from torchmetrics import JaccardIndex
 
 
-H = 513
-W = 513
-B = 8
-C = 19
-jaccard = JaccardIndex(task="multiclass", num_classes=19)
+# H = 513
+# W = 513
+# B = 8
+# C = 19
+# jaccard = JaccardIndex(task="multiclass", num_classes=19)
 
-target = torch.randint(0, 19, (B, H, W))
-target[B-1, 10:20, 0:3] = 255
-pred = torch.randn(B, C, H, W)
-print(pred.shape, target.shape)
+# target = torch.randint(0, 19, (B, H, W))
+# target[B-1, 10:20, 0:3] = 255
+# pred = torch.randn(B, C, H, W)
+# print(pred.shape, target.shape)
 
-miou = jaccard(pred, target)
-print(miou)
+# miou = jaccard(pred, target)
+# print(miou)
 
 
 def cal_mean_iou(pred, target):
@@ -109,5 +109,48 @@ def cal_mean_iou(pred, target):
     mean_iou = jaccard(score, target)
     print('mean iou: ',mean_iou)
     return mean_iou.detach().cpu().numpy()
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+height = 4
+width = 4
+channel = 1
+q = torch.randint(0, 9, (channel, height, width))
+k = torch.randint(0, 9, (channel, height, width))
+v = torch.randint(0, 9, (channel, height, width))
+
+
+kernel_size = 3
+
+k = F.pad(k, [(kernel_size-1)//2, (kernel_size-1)-((kernel_size-1)//2), (kernel_size-1)//2, (kernel_size-1)-((kernel_size-1)//2)])
+v = F.pad(v, [(kernel_size-1)//2, (kernel_size-1)-((kernel_size-1)//2), (kernel_size-1)//2, (kernel_size-1)-((kernel_size-1)//2)])
+# print('$$$$$$$padded k $$$$$')
+print('####q####' )
+print(q, q.shape)
+print('####padded k####')
+print(k, k.shape)
+k = k.unfold(1, kernel_size, 1).unfold(2, kernel_size, 1)
+v = v.unfold(1, kernel_size, 1).unfold(2, kernel_size, 1)
+print('######### After Folding k ##############')
+print(k, k.shape)
+# exit()
+
+k = k.reshape(height, width, channel, -1)
+v = v.reshape(height, width, channel, -1)
+q = q.reshape(height, width, channel, 1)
+print('@@@@@@@@ After Reshape @@@@@@@@@@@')
+print('q, k ,v: ',q.shape, k.shape, v.shape)
+print('####q####' )
+print(q)
+print('####k####' )
+print(k)
+
+qk = torch.matmul(q.transpose(2, 3), k)
+print('qk initial: ',qk.shape)
+
+qk = qk.reshape( height, width, kernel_size, kernel_size)
+print('qk: ',qk.shape, qk)
 
 

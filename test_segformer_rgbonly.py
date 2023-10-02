@@ -57,7 +57,7 @@ def Main(parser, cfg, args):
         saved_model_path = os.path.join(config.checkpoint_dir, "09-12-23_1501", 'model_400.pth')
         
         state_dict = torch.load(saved_model_path)
-        # model.load_state_dict(state_dict['model'], strict=True)
+        model.load_state_dict(state_dict['model'], strict=True)
         print(f'model loaded')
         epoch = state_dict['epoch']
         
