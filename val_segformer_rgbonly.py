@@ -89,14 +89,14 @@ def val_cityscape(epoch, val_loader, model):
             loss = torch.mean(loss)
             # m_iou = cal_mean_iou(out, gts)
 
-            score = out[0]      #C, H, W
+            score = out[0]      #1, C, H, W --> C, H, W = 19, H, W
             score = torch.exp(score)    
             score = score.permute(1, 2, 0)  #H,W,C
             # print('gts score:',gts.shape, score.shape)
-            pred = score.argmax(2)
+            pred = score.argmax(2)  #H,W
             
             pred = pred.detach().cpu().numpy()
-            gts = gts[0].detach().cpu().numpy()
+            gts = gts[0].detach().cpu().numpy() #1, H, W --> H, W
             # print(pred.shape, gts.shape)
             # exit()
             confusionMatrix, labeled, correct = hist_info(config.num_classes, pred, gts)
@@ -114,9 +114,9 @@ def val_cityscape(epoch, val_loader, model):
             #         + ' loss=%.4f total_loss=%.4f' % (loss, (sum_loss / (idx + 1)))+'\n'
 
             del loss
-            # if idx % config.val_print_stats == 0:
-            #     #pbar.set_description(print_str, refresh=True)
-            #     print(f'{print_str}')
+            if idx % config.val_print_stats == 0:
+                #pbar.set_description(print_str, refresh=True)
+                print(f'sample {idx}')
 
         val_loss = sum_loss/len(val_loader)
         result_dict = compute_metric(all_results)
@@ -127,4 +127,4 @@ def val_cityscape(epoch, val_loader, model):
         # val_mean_iou = np.mean(np.asarray(m_iou_batches))
         print(f"########## epoch:{epoch} mean_iou:{result_dict['mean_iou']} ############")
 
-        return val_loss, val_mean_iou
+        return val_loss, result_dict['mean_iou']
