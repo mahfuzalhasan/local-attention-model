@@ -87,7 +87,10 @@ def val_cityscape(epoch, val_loader, model):
 
             # mean over multi-gpu result
             loss = torch.mean(loss)
-            # m_iou = cal_mean_iou(out, gts)
+
+            m_iou = cal_mean_iou(out, gts)
+
+            
 
             score = out[0]      #1, C, H, W --> C, H, W = 19, H, W
             score = torch.exp(score)    
@@ -105,7 +108,7 @@ def val_cityscape(epoch, val_loader, model):
             all_results.append(results_dict)
 
             # compute_score(confusionMatrix, labeled, correct)
-            # m_iou_batches.append(m_iou)
+            m_iou_batches.append(m_iou)
 
             sum_loss += loss
 
@@ -124,7 +127,9 @@ def val_cityscape(epoch, val_loader, model):
 
         print(f"\n $$$$$$$ evaluating in epoch:{epoch} $$$$$$$ \n")
         print('result: ',result_dict)
-        # val_mean_iou = np.mean(np.asarray(m_iou_batches))
+        val_mean_iou = np.mean(np.asarray(m_iou_batches))
         print(f"########## epoch:{epoch} mean_iou:{result_dict['mean_iou']} ############")
+
+        print(f"########## mean_iou using library:{val_mean_iou} ############")
 
         return val_loss, result_dict['mean_iou']
