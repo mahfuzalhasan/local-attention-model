@@ -745,3 +745,4 @@ def load_dualpath_model(model, model_file, is_restore=False):
             t_ioend - t_start, t_end - t_ioend))
 
     return model
+
