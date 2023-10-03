@@ -92,16 +92,9 @@ class MultiScaleAttention(nn.Module):
 
 
     def attention(self, q, k, v):
-        ######print(self.scale)
-        ##print('q: ',q.size())
-        ##print('k: ',k.size())
-        ##print('v: ',v.size())
         attn = (q @ k.transpose(-2, -1)) * self.scale   # scaling needs to be fixed
-        # #####print('attn: ', attn.shape)   
         attn = attn.softmax(dim=-1)      #  couldn't figure out yet
         attn = self.attn_drop(attn)
-        # attn = attn.view(attn.shape[0], attn.shape[1], -1, attn.shape[4])
-        ##print('attn after reshape: ',attn.shape) 
         x = (attn @ v)
         return x
 
@@ -115,7 +108,7 @@ class MultiScaleAttention(nn.Module):
         return output_small_patched_attn
 
     def forward(self, x, H, W):
-        ####print('!!!!!!!!!!!!attention head: ',self.num_heads, ' !!!!!!!!!!')
+        #print('!!!!!!!!!!!!attention head: ',self.num_heads, ' !!!!!!!!!!')
         A = []
         B, N, C = x.shape
         q = self.q(x).reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
@@ -135,10 +128,8 @@ class MultiScaleAttention(nn.Module):
             a_1 = self.proj(a_1)
             a_1 = self.proj_drop(a_1)
             A.append(a_1)
-
         attn_fused = self.fuse_ms_attn_map(A, H, W)
-        attn_fused = attn_fused.reshape(B, C, N).transpose(1, 2)
-        
+        attn_fused = attn_fused.reshape(B, C, N).transpose(1, 2)        
         attn_fused = self.final_proj(attn_fused) 
         return attn_fused
 
