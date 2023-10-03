@@ -3,7 +3,12 @@ import torch.nn as nn
 
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 from stoken_attn_fusion import StokenAttention, StokenAttentionLayer
+from relative_pe import RelPosEmb
 
+from torch import nn, einsum
+import torch.nn.functional as F
+
+from einops import rearrange, repeat
 
 from fusion import iAFF
 import math
@@ -35,6 +40,11 @@ class MultiScaleAttention(nn.Module):
         # self.attn_fusion = []
         self.attn_fusion = [StokenAttentionLayer(dim, n_iter=1, 
                             sp_stoken_size=(local_region_shape[0], local_region_shape[0]), lp_stoken_size=None)]
+        self.rel_pos_shape_wise = []
+        for block_size in local_region_shape:
+            self.rel_pos_shape_wise.append(RelPosEmb(block_size, block_size, head_dim))
+        self.rel_pos_shape_wise = nn.ModuleList(self.rel_pos_shape_wise)
+
         for i in range(len(local_region_shape)-1):
             sp_stoken_size = (local_region_shape[i], local_region_shape[i])
             lp_stoken_size = (local_region_shape[i+1], local_region_shape[i+1])
@@ -64,38 +74,39 @@ class MultiScaleAttention(nn.Module):
     """ arr.shape -> B x num_head x H x W x C """
     # create overlapping patches
     def patchify(self, arr, H, W, patch_size, overlap = False):
-        if not overlap:
-            ##print('arr: ',arr.shape)
-            arr = arr.view(arr.shape[0], arr.shape[1], H, W, arr.shape[3])
-            ##print('arr view: ',arr.shape)
-            patches = arr.view(arr.shape[0], arr.shape[1], arr.shape[2] // patch_size, patch_size, arr.shape[3] // patch_size, patch_size, arr.shape[4])
-            ##print('patches: ',patches.shape)
-            #B x num_head x H//ps x ps x W//ps x ps x C
-            # #####print('patches shape: ', patches.shape)
-            patches = patches.permute(0, 1, 2, 4, 3, 5, 6).contiguous()
-            # B x num_head x C x H//ps x W//ps x ps x ps
-            ##print('patches permute: ', patches.shape)
-            patches = patches.view(patches.shape[0], patches.shape[1], patches.shape[2], patches.shape[3], -1, patches.shape[6])
-            ##print('patches reshape: ', patches.shape)
-            #exit()
-            return patches
-        else:
-            stride = patch_size//2
-            arr = arr.view(arr.shape[0], arr.shape[1], H, W, arr.shape[3])
-            arr = arr.permute(0, 1, 4, 2, 3)
-            patches = arr.unfold(4, patch_size, stride).unfold(3, patch_size, stride).contiguous()
-            ####print('patches: ',patches.shape)
-            patches = patches.view(arr.shape[0], arr.shape[1], -1, patch_size, patch_size)
-            ###print('patches: ',patches.shape)
-            #exit()
-            return patches
+        arr = arr.view(arr.shape[0], arr.shape[1], H, W, arr.shape[3])
+        # B, nh, H, W, Ch
+        B, Nh, H, W, Ch = arr.shape
+        
+        patches = arr.view(arr.shape[0], arr.shape[1], arr.shape[2] // patch_size, patch_size, arr.shape[3] // patch_size, patch_size, arr.shape[4])
+        #B, nh, H//p, p, W//p, p, Ch
+        #print(patches.shape)
+        # patches = patches.permute(0, 1, 2, 4, 3, 5, 6).contiguous()
+        # #B, nh, H//p, W//p, p, p , ch
+
+        patches = patches.permute(0, 2, 4, 1, 3, 5, 6).contiguous().view(-1, Nh, patch_size**2, Ch)
+        #B, nh, H//p, W//p, p, p , ch
+
+        
+        # patches = patches.view(patches.shape[0], patches.shape[1], patches.shape[2], patches.shape[3], -1, patches.shape[6])
+        # #B, H//p, W//p, nh, p^2, ch
+
+        return patches
 
 
-    def attention(self, q, k, v):
+    def attention(self, q_p, k_p, v_p, rel_pos):
+        B_, Nh, local_shape, Ch = q_p.shape
+        q, k, v = map(lambda t: rearrange(t, 'b h n d -> (b h) n d', h = Nh), (q_p, k_p, v_p))
+        #print(q.shape, k.shape, v.shape)
         attn = (q @ k.transpose(-2, -1)) * self.scale   # scaling needs to be fixed
         attn = attn.softmax(dim=-1)      #  couldn't figure out yet
-        attn = self.attn_drop(attn)
+        # #print('attn matrix: ',attn.shape)
+        a = rel_pos(q)
+        #print('rel_pos: ',a.shape)
+        attn = self.attn_drop(attn) 
+        attn += a
         x = (attn @ v)
+        x = x.view(B_, Nh, local_shape, Ch)
         return x
 
     # with different stoken fusion for smallest token and discarding global attention
@@ -108,23 +119,30 @@ class MultiScaleAttention(nn.Module):
         return output_small_patched_attn
 
     def forward(self, x, H, W):
-        #print('!!!!!!!!!!!!attention head: ',self.num_heads, ' !!!!!!!!!!')
+        ##print('!!!!!!!!!!!!attention head: ',self.num_heads, ' !!!!!!!!!!')
         A = []
         B, N, C = x.shape
         q = self.q(x).reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
-
         kv = self.kv(x).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         k, v = kv[0], kv[1]
-        
-        for rg_shp in self.local_region_shape:
-            q_patch = self.patchify(q, H, W, rg_shp)
-            k_patch = self.patchify(k, H, W, rg_shp)
-            v_patch = self.patchify(v, H, W, rg_shp)
-            patched_attn = self.attention(q_patch, k_patch, v_patch)
-            patched_attn = patched_attn.permute(0, 1, 5, 2, 3, 4).contiguous()
-            a_1 = patched_attn.view(patched_attn.shape[0], -1, patched_attn.shape[3], patched_attn.shape[4], rg_shp, rg_shp)
-            a_1 = a_1.permute(0, 1, 2, 4, 3, 5).contiguous().reshape(B, C, N)
-            a_1 = a_1.transpose(1, 2)
+        #print('initial: ',q.shape, k.shape)
+        for idx, patch_size in enumerate(self.local_region_shape):
+            q_patch = self.patchify(q, H, W, patch_size)
+            k_patch = self.patchify(k, H, W, patch_size)
+            v_patch = self.patchify(v, H, W, patch_size)
+            #print('for attn: ',q_patch.shape, k_patch.shape)
+            rel_pos = self.rel_pos_shape_wise[idx]
+            patched_attn = self.attention(q_patch, k_patch, v_patch, rel_pos)
+            ## B_, Nh, p^2, Ch
+            # #print(patched_attn.shape)
+            patched_attn = patched_attn.permute(0, 2, 1, 3).contiguous()
+            # B_, p^2, Nh, Ch --> (B, H//p, W//p, p^2, C)
+            #print('attn size: ',patched_attn.shape)
+            # a_1 = patched_attn.view(patched_attn.shape[0], -1, patched_attn.shape[3], patched_attn.shape[4], patch_size, patch_size)
+            a_1 = patched_attn.view(B, H//patch_size, W//patch_size, patch_size**2, self.num_heads, C // self.num_heads)
+            a_1 = a_1.reshape(B, N, C)
+            # #print('final attn size: ',a_1.shape)
+            # a_1 = a_1.transpose(1, 2)
             a_1 = self.proj(a_1)
             a_1 = self.proj_drop(a_1)
             A.append(a_1)
@@ -134,18 +152,18 @@ class MultiScaleAttention(nn.Module):
         return attn_fused
 
 if __name__=="__main__":
-    # #######print(backbone)
+    # ########print(backbone)
     B = 4
     C = 3
     H = 480
     W = 640
     device = 'cuda:0'
-    ms_attention = MultiScaleAttention(32, num_heads=4, sr_ratio=8, local_region_shape=[5,10,20,40])
+    ms_attention = MultiScaleAttention(32, num_heads=4, sr_ratio=8, local_region_shape=[2,4,8])
     ms_attention = ms_attention.to(device)
     # ms_attention = nn.DataParallel(ms_attention, device_ids = [0,1])
     # ms_attention.to(f'cuda:{ms_attention.device_ids[0]}', non_blocking=True)
 
     f = torch.randn(B, 19200, 32).to(device)
-    ##print(f'input to multiScaleAttention:{f.shape}')
+    ###print(f'input to multiScaleAttention:{f.shape}')
     y = ms_attention(f, 120, 160)
-    ##print('output: ',y.shape)
+    print('output: ',y.shape)
