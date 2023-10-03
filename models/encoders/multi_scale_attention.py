@@ -41,6 +41,7 @@ class MultiScaleAttention(nn.Module):
         self.attn_fusion = [StokenAttentionLayer(dim, n_iter=1, 
                             sp_stoken_size=(local_region_shape[0], local_region_shape[0]), lp_stoken_size=None)]
         self.rel_pos_shape_wise = []
+        
         for block_size in local_region_shape:
             self.rel_pos_shape_wise.append(RelPosEmb(block_size, block_size, head_dim))
         self.rel_pos_shape_wise = nn.ModuleList(self.rel_pos_shape_wise)
@@ -97,14 +98,15 @@ class MultiScaleAttention(nn.Module):
     def attention(self, q_p, k_p, v_p, rel_pos):
         B_, Nh, local_shape, Ch = q_p.shape
         q, k, v = map(lambda t: rearrange(t, 'b h n d -> (b h) n d', h = Nh), (q_p, k_p, v_p))
-        #print(q.shape, k.shape, v.shape)
+        # B and Nh are merged before attention weight calculation
+        # Because rpe is caculated for each window separately
+
         attn = (q @ k.transpose(-2, -1)) * self.scale   # scaling needs to be fixed
-        attn = attn.softmax(dim=-1)      #  couldn't figure out yet
-        # #print('attn matrix: ',attn.shape)
         a = rel_pos(q)
-        #print('rel_pos: ',a.shape)
-        attn = self.attn_drop(attn) 
         attn += a
+        #print('rel_pos: ',a.shape) 
+        attn = attn.softmax(dim=-1)      #  couldn't figure out yet
+        attn = self.attn_drop(attn) 
         x = (attn @ v)
         x = x.view(B_, Nh, local_shape, Ch)
         return x
@@ -136,10 +138,11 @@ class MultiScaleAttention(nn.Module):
             ## B_, Nh, p^2, Ch
             # #print(patched_attn.shape)
             patched_attn = patched_attn.permute(0, 2, 1, 3).contiguous()
-            # B_, p^2, Nh, Ch --> (B, H//p, W//p, p^2, C)
+            # B_, p^2, Nh, Ch
             #print('attn size: ',patched_attn.shape)
             # a_1 = patched_attn.view(patched_attn.shape[0], -1, patched_attn.shape[3], patched_attn.shape[4], patch_size, patch_size)
             a_1 = patched_attn.view(B, H//patch_size, W//patch_size, patch_size**2, self.num_heads, C // self.num_heads)
+            # B_, p^2, Nh, Ch --> (B, H//p, W//p, p^2, C)
             a_1 = a_1.reshape(B, N, C)
             # #print('final attn size: ',a_1.shape)
             # a_1 = a_1.transpose(1, 2)
