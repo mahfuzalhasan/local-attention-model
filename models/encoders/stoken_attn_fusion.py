@@ -103,30 +103,30 @@ class StokenAttention(nn.Module):
         '''
            x: (B, C, H, W)
         '''
-        # if x_l is not None:
-        hs, ws = self.sp_stoken_size
-        token_small_attn = F.avg_pool2d(x_s, (hs, ws))
-        token_small_attn = F.avg_pool2d(token_small_attn, (2, 2))
+        if x_l is not None:
+            hs, ws = self.sp_stoken_size
+            token_small_attn = F.avg_pool2d(x_s, (hs, ws))
+            token_small_attn = F.avg_pool2d(token_small_attn, (2, 2))
 
-        ### for the sake of carrying info from large token space to small token space
-        B, C, H0, W0 = x_l.shape
-        x_l, pad_r, pad_b = self.sample_resizing(x_l, self.lp_stoken_size)
-        _, _, H, W = x_l.shape
-        h, w = self.lp_stoken_size
-        hh, ww = H//h, W//w
-        token_large_attn = F.adaptive_avg_pool2d(x_l, (hh, ww)) # (B, C, hh, ww)
-        stoken_features = token_small_attn + token_large_attn
-        ##########################################################################
-        pixel_features = x_l.reshape(B, C, hh, h, ww, w).permute(0, 2, 4, 3, 5, 1).reshape(B, hh*ww, h*w, C)
-        # else:   # For first attention
-        #     B, C, H0, W0 = x_s.shape
-        #     x_s, pad_r, pad_b = self.sample_resizing(x_s, self.sp_stoken_size)
-        #     _, _, H, W = x_s.shape
-        #     h, w = self.sp_stoken_size
-        #     hh, ww = H//h, W//w
+            ### for the sake of carrying info from large token space to small token space
+            B, C, H0, W0 = x_l.shape
+            x_l, pad_r, pad_b = self.sample_resizing(x_l, self.lp_stoken_size)
+            _, _, H, W = x_l.shape
+            h, w = self.lp_stoken_size
+            hh, ww = H//h, W//w
+            token_large_attn = F.adaptive_avg_pool2d(x_l, (hh, ww)) # (B, C, hh, ww)
+            stoken_features = token_small_attn + token_large_attn
+            ##########################################################################
+            pixel_features = x_l.reshape(B, C, hh, h, ww, w).permute(0, 2, 4, 3, 5, 1).reshape(B, hh*ww, h*w, C)
+        else:   # For first attention
+            B, C, H0, W0 = x_s.shape
+            x_s, pad_r, pad_b = self.sample_resizing(x_s, self.sp_stoken_size)
+            _, _, H, W = x_s.shape
+            h, w = self.sp_stoken_size
+            hh, ww = H//h, W//w
             
-        #     stoken_features = F.adaptive_avg_pool2d(x_s, (hh, ww))
-        #     pixel_features = x_s.reshape(B, C, hh, h, ww, w).permute(0, 2, 4, 3, 5, 1).reshape(B, hh*ww, h*w, C)
+            stoken_features = F.adaptive_avg_pool2d(x_s, (hh, ww))
+            pixel_features = x_s.reshape(B, C, hh, h, ww, w).permute(0, 2, 4, 3, 5, 1).reshape(B, hh*ww, h*w, C)
 
         
 
@@ -182,10 +182,11 @@ class StokenAttention(nn.Module):
 
     def forward(self, xs, xl):
         # if self.stoken_size[0] > 1 or self.stoken_size[1] > 1:
-        return self.stoken_forward(xs, xl)
-        # if self.lp_stoken_size is not None:
-        # else:
-            # return self.stoken_forward(xs)
+        # return self.stoken_forward(xs, xl)
+        if self.lp_stoken_size is not None:
+            return self.stoken_forward(xs, xl)
+        else:
+            return self.stoken_forward(xs)
 
 class LayerNorm2d(nn.Module):
     def __init__(self, dim):
