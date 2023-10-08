@@ -41,7 +41,7 @@ from tensorboardX import SummaryWriter
 import torch.multiprocessing
 torch.multiprocessing.set_sharing_strategy('file_system')
 
-def Main(parser, cfg, args):
+def Main(parser, cfg):
     with Engine(custom_parser=parser) as engine:
         run_id = datetime.today().strftime('%m-%d-%y_%H%M')
         print(f'$$$$$$$$$$$$$ run_id:{run_id} $$$$$$$$$$$$$')
@@ -217,16 +217,16 @@ if __name__=='__main__':
     parser = argparse.ArgumentParser(description="Test cityscapes Loader")
     parser.add_argument('config_file', help='config file path')
     parser.add_argument("opts", help="Modify config options using the command-line", default=None, nargs=argparse.REMAINDER)
-    #parser.add_argument('devices', default='0,1', type=str)
+    # parser.add_argument('devices', default='0,1', type=str)
     args = parser.parse_args()
-    print(args.opts)
+    print("Argument options ", args.opts)
     cfg = get_cfg_defaults()
     cfg.merge_from_file(args.config_file) # dataloader/cityscapes_rgbd_config.yaml
     cfg.merge_from_list(args.opts)
     cfg.freeze()
-    print(cfg)
+    print('Config ', cfg)
 
     logger = get_logger()
 
     os.environ['MASTER_PORT'] = '169710'
-    Main(parser, cfg, args)
+    Main(parser, cfg)

@@ -134,7 +134,7 @@ class MultiScaleAttention(nn.Module):
         ####print('!!!!!!!!!!!!attention head: ',self.num_heads, ' !!!!!!!!!!')
         A = []
         B, N, C = x.shape
-        q = self.q(x).reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
+        q = self.q(x).reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3) # Query not pos emb, we use a linear layer 
 
         # This reduces dimension of k and v
         # 120, 160 --Flatten--> 19200--FNN--> 300
@@ -145,7 +145,7 @@ class MultiScaleAttention(nn.Module):
             kv = self.kv(x_).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4) 
         else:
             kv = self.kv(x).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4) 
-        k_full, v_full = kv[0], kv[1]
+        k_full, v_full = kv[0], kv[1]  #$ key val
         ###print(f'global q:{q.shape} k:{k_full.shape} v:{v_full.shape}')
         a_1 = self.attention(q, k_full, v_full)
         ###print(f'full scale attn:{a_1.shape}')
@@ -203,13 +203,13 @@ if __name__=="__main__":
     C = 3
     H = 480
     W = 640
-    device = 'cuda:0'
+    device = 'cpu'
     ms_attention = MultiScaleAttention(32, num_heads=4, sr_ratio=8, local_region_shape=[5,10,20,40])
     ms_attention = ms_attention.to(device)
     # ms_attention = nn.DataParallel(ms_attention, device_ids = [0,1])
     # ms_attention.to(f'cuda:{ms_attention.device_ids[0]}', non_blocking=True)
 
     f = torch.randn(B, 19200, 32).to(device)
-    ##print(f'input to multiScaleAttention:{f.shape}')
+    print(f'input to multiScaleAttention:{f.shape}')
     y = ms_attention(f, 120, 160)
-    ##print('output: ',y.shape)
+    print('output: ',y.shape)
