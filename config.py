@@ -12,7 +12,7 @@ cfg = C
 
 C.seed = 12345
 
-remoteip = os.popen('pwd').read()
+# remoteip = os.popen('pwd').read()
 #C.root_dir = os.path.abspath(os.path.join(os.getcwd(), './'))
 C.root_dir = os.getcwd()
 C.abs_dir = osp.realpath(".")
@@ -74,7 +74,8 @@ C.fix_bias = True
 C.bn_eps = 1e-3
 C.bn_momentum = 0.1
 C.print_stats = 30
-C.device_ids = [0, 1] # for mahdi
+C.device_ids = [0] # for jawad
+# C.device_ids = [0, 1] # for mahdi
 #C.device_ids = [0, 1, 2, 3] # for sakin
 C.resume_train = False 
 C.resume_model_path = osp.join(C.root_dir, 'Results/saved_models/07-10-23_2314/model_330.pth')
