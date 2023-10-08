@@ -28,8 +28,7 @@ class State(object):
 
 class Engine(object):
     def __init__(self, custom_parser=None):
-        logger.info(
-            "PyTorch Version {}".format(torch.__version__))
+        logger.info("PyTorch Version {}".format(torch.__version__))
         self.state = State()
         self.devices = None
         self.distributed = False
@@ -63,7 +62,7 @@ class Engine(object):
 
     def inject_default_parser(self):
         p = self.parser
-        p.add_argument('-d', '--devices', default='0,1',
+        p.add_argument('-d', '--devices', default='0',
                        help='set data parallel training')
         p.add_argument('-c', '--continue', type=extant_file,
                        metavar="FILE",
