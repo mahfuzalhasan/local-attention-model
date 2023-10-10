@@ -30,29 +30,42 @@ class MultiScaleAttention(nn.Module):
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
+        
+                
+        ## Relative Positional Embedding Layers
+        self.rel_pos_shape_wise = []
+        for block_size in local_region_shape:
+            self.rel_pos_shape_wise.append(RelPosEmb(block_size, block_size, head_dim))
+        self.rel_pos_shape_wise = nn.ModuleList(self.rel_pos_shape_wise)
+
+        ## Fusion with weighted summation ------------------------------------------
+        self.weights = nn.Parameter(torch.randn(len(local_region_shape)))
+        # ------------------------------------------
 
         self.sr_ratio = sr_ratio
         if sr_ratio > 1:
             self.sr = nn.Conv2d(dim, dim, kernel_size=sr_ratio, stride=sr_ratio)
             self.norm = nn.LayerNorm(dim)
-
-        # self.attn_fusion = iAFF(dim)
-        # self.attn_fusion = []
-        self.attn_fusion = [StokenAttentionLayer(dim, n_iter=1, 
-                            sp_stoken_size=(local_region_shape[0], local_region_shape[0]), lp_stoken_size=None)]
-        self.rel_pos_shape_wise = []
         
-        for block_size in local_region_shape:
-            self.rel_pos_shape_wise.append(RelPosEmb(block_size, block_size, head_dim))
-        self.rel_pos_shape_wise = nn.ModuleList(self.rel_pos_shape_wise)
 
-        for i in range(len(local_region_shape)-1):
-            sp_stoken_size = (local_region_shape[i], local_region_shape[i])
-            lp_stoken_size = (local_region_shape[i+1], local_region_shape[i+1])
-            self.attn_fusion.append(StokenAttentionLayer(dim, n_iter=1, 
-                            sp_stoken_size=sp_stoken_size, lp_stoken_size=lp_stoken_size))
-        self.attn_fusion = nn.ModuleList(self.attn_fusion)
-        # self.global_fusion = iAFF(dim)
+        ## Fusion with iAFF ------------------------------------------
+        # self.attn_fusion = iAFF(dim)
+        # ------------------------------------------
+        
+        ## Fusion with StokenAttention ------------------------------------------
+        # self.attn_fusion = []
+        # self.attn_fusion = [StokenAttentionLayer(dim, n_iter=1, 
+        #                     sp_stoken_size=(local_region_shape[0], local_region_shape[0]), lp_stoken_size=None)]
+        
+        # for i in range(len(local_region_shape)-1):
+        #     sp_stoken_size = (local_region_shape[i], local_region_shape[i])
+        #     lp_stoken_size = (local_region_shape[i+1], local_region_shape[i+1])
+        #     self.attn_fusion.append(StokenAttentionLayer(dim, n_iter=1, 
+        #                     sp_stoken_size=sp_stoken_size, lp_stoken_size=lp_stoken_size))
+        # self.attn_fusion = nn.ModuleList(self.attn_fusion)
+        # ------------------------------------------
+        
+
         self.final_proj = nn.Linear(dim, dim)
         self.apply(self._init_weights)
 
@@ -149,8 +162,16 @@ class MultiScaleAttention(nn.Module):
             a_1 = self.proj(a_1)
             a_1 = self.proj_drop(a_1)
             A.append(a_1)
-        attn_fused = self.fuse_ms_attn_map(A, H, W)
-        attn_fused = attn_fused.reshape(B, C, N).transpose(1, 2)        
+          
+        # For weighted adjoining of attentional weights ~~~~~~~~~~~~~~~~~~~
+        A = torch.stack(A)
+        self.weights = self.weights.to(A.device)
+        # print('weight shape: ',self.weights.shape)           
+        attn_fused = torch.einsum('ijkl,i->jkl', A, self.weights)
+        # print('attn_fused after einsum: ', attn_fused.shape)
+            
+        # attn_fused = self.fuse_ms_attn_map(A, H, W)
+        # attn_fused = attn_fused.reshape(B, C, N).transpose(1, 2)        
         attn_fused = self.final_proj(attn_fused) 
         return attn_fused
 
