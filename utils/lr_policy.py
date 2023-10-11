@@ -62,3 +62,30 @@ class LinearIncreaseLR(BaseLR):
 
     def get_lr(self, cur_epoch):
         return self._start_lr + cur_epoch * self._delta_lr
+
+
+if __name__=="__main__":
+    start_lr = 9e-5
+    lr_power = 1
+    num_train_imgs = 2975
+    batch_size = 8
+
+    n_epoch = 430
+
+    niters_per_epoch = num_train_imgs // batch_size  + 1
+    print(niters_per_epoch)
+    
+    total_iters = 160000
+    warmup_epoch = 20
+    
+    lr_policy = WarmUpPolyLR(start_lr, lr_power, total_iters, warmup_epoch * niters_per_epoch )
+    lr_policy_2 = PolyLR(start_lr, lr_power, total_iters)
+    for epoch in range(1, n_epoch+1):
+        for idx in range(niters_per_epoch):
+            current_idx = (epoch - 1) * niters_per_epoch + idx 
+            lr = lr_policy.get_lr(current_idx)
+            lr2 = lr_policy_2.get_lr(current_idx)
+
+        print(f'epoch:{epoch} warmupPolyLR:{lr} polyLR:{lr2}')
+
+    
