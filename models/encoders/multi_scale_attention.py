@@ -188,6 +188,7 @@ class MultiScaleAttention(nn.Module):
             #exit()
             A.append(a_1)
 
+        #### Function plot attention maps
         #print('$$$$multi attention shapes$$$$')
         # for attn_o in A:
         #     #print(attn_o.shape)
@@ -195,6 +196,7 @@ class MultiScaleAttention(nn.Module):
         attn_fused = attn_fused.reshape(B, C, N).transpose(1, 2)
         
         attn_fused = self.final_proj(attn_fused) 
+        #### Function fused attention maps
         return attn_fused
 
 if __name__=="__main__":
