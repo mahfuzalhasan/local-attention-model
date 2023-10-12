@@ -326,19 +326,26 @@ class RGBXTransformer(nn.Module):
         # stage 1
         x_rgb, H, W = self.patch_embed1(x_rgb)
 
-        # print('tokenization: ',x_rgb.shape)
+        #print('############### Stage 1 ##########################')
+        #print('tokenization: ',x_rgb.shape)
 
         # exit()
         # B H*W/16 C
+       
         for i, blk in enumerate(self.block1):
             x_rgb = blk(x_rgb, H, W)
         x_rgb = self.norm1(x_rgb)
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         outs.append(x_rgb)
+        #print('output: ',x_rgb.shape)
+        #print("******** End Stage 1 **************")
+        
         
 
         # stage 2
+        #print('############### Stage 2 ##########################')
         x_rgb, H, W = self.patch_embed2(x_rgb)
+        #print('tokenization: ',x_rgb.shape)
         
         for i, blk in enumerate(self.block2):
             x_rgb = blk(x_rgb, H, W)
@@ -346,10 +353,15 @@ class RGBXTransformer(nn.Module):
         x_rgb = self.norm2(x_rgb)
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         outs.append(x_rgb)
+
+        #print('output: ',x_rgb.shape)
+        #print("******** End Stage 2 **************")
         
 
         # stage 3
         x_rgb, H, W = self.patch_embed3(x_rgb)
+        #print('############### Stage 3 ##########################')
+        #print('tokenization: ',x_rgb.shape)
         
         for i, blk in enumerate(self.block3):
             x_rgb = blk(x_rgb, H, W)
@@ -357,16 +369,24 @@ class RGBXTransformer(nn.Module):
         x_rgb = self.norm3(x_rgb)
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         outs.append(x_rgb)
+
+        #print('output: ',x_rgb.shape)
+        #print("******** End Stage 3 **************")
         
 
         # stage 4
         x_rgb, H, W = self.patch_embed4(x_rgb)
+        #print('############### Stage 4 ##########################')
+        #print('tokenization: ',x_rgb.shape)
         
         for i, blk in enumerate(self.block4):
             x_rgb = blk(x_rgb, H, W)
         x_rgb = self.norm4(x_rgb)
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         outs.append(x_rgb)
+
+        #print('output: ',x_rgb.shape)
+        #print("******** End Stage 4 **************")
         
         return outs
 
@@ -452,11 +472,11 @@ if __name__=="__main__":
     # #######print(backbone)
     B = 4
     C = 3
-    H = 480
-    W = 640
+    H = 1024
+    W = 1024
     device = 'cuda:0'
     rgb = torch.randn(B, C, H, W)
     x = torch.randn(B, C, H, W)
-    outputs = backbone(rgb, x)
+    outputs = backbone(rgb)
     # for output in outputs:
     #     #print(output.size())

@@ -2,11 +2,7 @@ import torch
 import torch.nn as nn
 
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
-from stoken_attn_fusion import StokenAttention, StokenAttentionLayer
 from einops import rearrange, repeat
-
-
-from fusion import iAFF
 import math
 import time
 
@@ -32,17 +28,6 @@ class MultiScaleAttention(nn.Module):
         if sr_ratio > 1:
             self.sr = nn.Conv2d(dim, dim, kernel_size=sr_ratio, stride=sr_ratio)
             self.norm = nn.LayerNorm(dim)
-
-        # self.attn_fusion = iAFF(dim)
-        self.attn_fusion = []
-        for i in range(len(local_region_shape)-1):
-            sp_stoken_size = (local_region_shape[i], local_region_shape[i])
-            lp_stoken_size = (local_region_shape[i+1], local_region_shape[i+1])
-            self.attn_fusion.append(StokenAttentionLayer(dim, n_iter=1, 
-                            sp_stoken_size=sp_stoken_size, lp_stoken_size=lp_stoken_size))
-        self.attn_fusion = nn.ModuleList(self.attn_fusion)
-        self.global_fusion = iAFF(dim)
-        self.final_proj = nn.Linear(dim, dim)
         self.apply(self._init_weights)
 
     def _init_weights(self, m):
@@ -127,7 +112,6 @@ class MultiScaleAttention(nn.Module):
                 # Grouping head will be experimented later
                 B_, Nh, Np, Ch = q_patch.shape
                 q_p, k_p, v_p = map(lambda t: rearrange(t, 'b h n d -> (b h) n d', h = Nh), (q_patch, k_patch, v_patch))
-                
                 patched_attn = self.attention(q_p, k_p, v_p)
                 patched_attn = patched_attn.view(B_, Nh, Np, Ch)
                 patched_attn = patched_attn.permute(0, 2, 1, 3).contiguous().reshape(B, N, Ch)
