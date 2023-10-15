@@ -60,8 +60,8 @@ def val_cityscape(epoch, val_loader, model):
     unique_values = []
     with torch.no_grad():
         for idx, sample in enumerate(val_loader):
-            imgs = sample['image']
-            gts = sample['label']
+            imgs = sample['image']      #B, 1024, 2048
+            gts = sample['label']       #B, 1024, 2048
             imgs = imgs.to(f'cuda:{model.device_ids[0]}', non_blocking=True)
             gts = gts.to(f'cuda:{model.device_ids[0]}', non_blocking=True)  
 
@@ -81,7 +81,10 @@ def val_cityscape(epoch, val_loader, model):
 
 
             aux_rate = 0.2
+            #### imgs --> 1X1024x1024 , 1x1024x1024
+            #### gts --> 1X1024x1024 , 1x1024x1024
             loss, out = model(imgs, gts)
+            
             # print(f'imgs:{imgs.shape} gts:{gts.shape}')
             # print(f'loss:{loss} out:{out.shape}')
 

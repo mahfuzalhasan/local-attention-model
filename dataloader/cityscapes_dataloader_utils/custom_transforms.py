@@ -203,13 +203,13 @@ class FixScaleCrop(object):
     def __call__(self, sample):
 
         img = sample['image']
-        mask = sample['label']
+        mask = sample['label']      --> 2048, 1024
         depth = sample['depth']
 
         w, h = img.size
         if w > h:
-            oh = self.crop_size
-            ow = int(1.0 * w * oh / h)
+            oh = self.crop_size     #1024
+            ow = int(1.0 * w * oh / h) #2048
         else:
             ow = self.crop_size
             oh = int(1.0 * h * ow / w)
@@ -217,7 +217,7 @@ class FixScaleCrop(object):
         mask = mask.resize((ow, oh), Image.NEAREST)
         # center crop
         w_resize, h_resize = mask.size
-        x1 = int(round((w_resize - self.crop_size) / 2.))
+        x1 = int(round((w_resize - self.crop_size) / 2.))       #[512, 0 ]
         y1 = int(round((h_resize - self.crop_size) / 2.))
         mask = mask.crop((x1, y1, x1 + self.crop_size, y1 + self.crop_size))
 

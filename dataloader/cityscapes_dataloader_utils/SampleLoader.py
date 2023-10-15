@@ -98,8 +98,10 @@ class SampleLoader():
             tr.ToTensor()])
         return composed_transforms(sample)
 
+    
     def transform_tr(self, sample):
         composed_transforms = transforms.Compose([
+            # tr.Resize(ratio=rand(0.5, 2), )
             tr.RandomHorizontalFlip(),
             tr.RandomScaleCrop(base_size=self.base_size, crop_size=self.crop_size, fill=255),
             tr.RandomDarken(self.cfg, self.darken),
