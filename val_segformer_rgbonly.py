@@ -65,6 +65,8 @@ def val_cityscape(epoch, val_loader, model):
             imgs = imgs.to(f'cuda:{model.device_ids[0]}', non_blocking=True)
             gts = gts.to(f'cuda:{model.device_ids[0]}', non_blocking=True)  
 
+            # print('imgs, gts:', imgs.size(), gts.size())
+
             # u_val = torch.unique(gts)
             # u_val = u_val.detach().cpu().numpy()
             # u_val = list(u_val)
@@ -81,14 +83,25 @@ def val_cityscape(epoch, val_loader, model):
 
 
             aux_rate = 0.2
-            loss, out = model(imgs, gts)
+            imgs_1, imgs_2 = imgs[:, :, :, :1024], imgs[:, :, :, 1024:]
+            gts_1, gts_2 = gts[:, :, :1024], gts[:, :, 1024:]
+            
+            loss_1, out_1 = model(imgs_1, gts_1)
+            loss_2, out_2 = model(imgs_2, gts_2)
+
+            out = torch.cat((out_1, out_2), dim = 3)
+            # print('out: ',out.size())
             # print(f'imgs:{imgs.shape} gts:{gts.shape}')
             # print(f'loss:{loss} out:{out.shape}')
 
             # mean over multi-gpu result
-            loss = torch.mean(loss)
+            loss = torch.mean(loss_1) + torch.mean(loss_2)
+            # print('loss: ',loss)
 
             m_iou = cal_mean_iou(out, gts)
+
+            # print('miou from lib: ',m_iou)
+            # exit()
 
             
 

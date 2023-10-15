@@ -112,7 +112,7 @@ class SampleLoader():
     def transform_val(self, sample):
 
         composed_transforms = transforms.Compose([
-            tr.FixScaleCrop(crop_size=self.crop_size),
+            # tr.FixScaleCrop(crop_size=self.crop_size),
             tr.Darken(self.cfg),
             tr.Normalize(mean=self.data_mean, std=self.data_std),
             tr.ToTensor()])
