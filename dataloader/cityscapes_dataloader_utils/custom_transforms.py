@@ -6,6 +6,67 @@ import skimage
 
 from PIL import Image, ImageOps, ImageFilter
 
+
+
+class Resize(object):
+    def __init__(self, img_scale, ratio_range):
+        self.img_scale = img_scale
+        self.ratio_range = ratio_range
+        print("initial ++++++++++++++++++++++++++ resize")
+        pass
+
+    def _random_scale(self,):
+        min_ratio, max_ratio = self.ratio_range
+        ratio = np.random.random_sample() * (max_ratio - min_ratio) + min_ratio
+        scale = int(self.img_scale[0] * ratio), int(self.img_scale[1] * ratio) 
+        scale_idx = None
+        return scale, scale_idx
+    
+    def _resize_img(self, img, scale):
+
+        pil_image = Image.fromarray(img)
+        pil_image = pil_image.resize(self.img_scale, Image.BILINEAR)
+        resized_img = np.array(pil_image)
+
+        w_scale = scale[0] / img.shape[0]
+        h_scale = scale[1] / img.shape[1]
+
+        return resized_img, w_scale, h_scale
+
+    def _resize_label(self, label, scale):
+        h, w = label.shape[:2]
+
+        max_long_edge = max(scale)
+        max_short_edge = min(scale)
+        scale = min(max_long_edge / max(h, w), max_short_edge / min(h, w))
+        # new_size = _scale_size((w, h), scale_factor)
+        new_size = int(w*float(scale)+0.5), int(h*float(scale)+0.5)
+
+        # rescaled_img = imresize(img, new_size, interpolation=interpolation, backend=backend)
+        rescaled_label = Image.fromarray(label)
+        rescaled_label = rescaled_label.resize(new_size, Image.NEAREST)
+        rescaled_label = np.array(rescaled_label)
+        
+        return rescaled_label   
+
+    def __call__(self, sample):
+        img = sample['image']
+        label = sample['label']
+        depth = sample['depth']
+        
+        print("call ++++++++++++++++++++++++++ resize", img.shape, label.shape)
+        scale, scale_idx = self._random_scale()
+        print("call ++++++++++++++++++++++++++ resize", scale, scale_idx)
+        img, w_scale, h_scale = self._resize_img(img, scale)
+        label = self._resize_label(label, scale)
+
+        print("call ++++++++++++++++++++++++++ resize", img.shape, label.shape)
+        return {'image': img,
+                'depth': depth,
+                'label': label}
+    
+
+
 class Normalize(object):
     """Normalize a tensor image with mean and standard deviation.
     Args:
