@@ -4,13 +4,13 @@ import numpy as np
 import torchvision
 import skimage
 
-from PIL import Image, ImageOps, ImageFilter
+from PIL import Image, ImageOps, ImageFilter, ImageEnhance
 
 
 
 class Resize(object):
-    def __init__(self, img_scale, ratio_range):
-        self.img_scale = img_scale
+    def __init__(self, ratio_range):
+        self.img_scale = None
         self.ratio_range = ratio_range
         print("initial ++++++++++++++++++++++++++ resize")
         pass
@@ -18,34 +18,27 @@ class Resize(object):
     def _random_scale(self,):
         min_ratio, max_ratio = self.ratio_range
         ratio = np.random.random_sample() * (max_ratio - min_ratio) + min_ratio
+        # scale is a tuple of (h, w)
         scale = int(self.img_scale[0] * ratio), int(self.img_scale[1] * ratio) 
-        scale_idx = None
-        return scale, scale_idx
+        # we make it float according to mmcv
+        return scale
     
     def _resize_img(self, img, scale):
-
-        pil_image = Image.fromarray(img)
-        pil_image = pil_image.resize(self.img_scale, Image.BILINEAR)
-        resized_img = np.array(pil_image)
-
-        w_scale = scale[0] / img.shape[0]
-        h_scale = scale[1] / img.shape[1]
-
-        return resized_img, w_scale, h_scale
+        
+        h, w = img.size
+        max_edge = max(h, w)
+        scale_factor = max(scale) / max_edge
+        new_size = int(w*float(scale_factor)+0.5), int(h*float(scale_factor)+0.5)
+        rescaled_img = img.resize(new_size, Image.BILINEAR)
+        return rescaled_img
 
     def _resize_label(self, label, scale):
-        h, w = label.shape[:2]
+        h, w = label.size
+        max_edge = max(h, w)
+        scale_factor = max(scale) / max_edge
+        new_size = int(w*float(scale_factor)+0.5), int(h*float(scale_factor)+0.5)
 
-        max_long_edge = max(scale)
-        max_short_edge = min(scale)
-        scale = min(max_long_edge / max(h, w), max_short_edge / min(h, w))
-        # new_size = _scale_size((w, h), scale_factor)
-        new_size = int(w*float(scale)+0.5), int(h*float(scale)+0.5)
-
-        # rescaled_img = imresize(img, new_size, interpolation=interpolation, backend=backend)
-        rescaled_label = Image.fromarray(label)
-        rescaled_label = rescaled_label.resize(new_size, Image.NEAREST)
-        rescaled_label = np.array(rescaled_label)
+        rescaled_label = label.resize(new_size, Image.NEAREST)
         
         return rescaled_label   
 
@@ -54,17 +47,113 @@ class Resize(object):
         label = sample['label']
         depth = sample['depth']
         
-        print("call ++++++++++++++++++++++++++ resize", img.shape, label.shape)
-        scale, scale_idx = self._random_scale()
-        print("call ++++++++++++++++++++++++++ resize", scale, scale_idx)
-        img, w_scale, h_scale = self._resize_img(img, scale)
+        self.img_scale = img.size
+
+        print("call ++img, label++ resize", img.size, label.size)
+        scale = self._random_scale()
+        print("call +++ scale ", scale)
+        rescaled_img = self._resize_img(img, scale)
         label = self._resize_label(label, scale)
 
-        print("call ++++++++++++++++++++++++++ resize", img.shape, label.shape)
-        return {'image': img,
+        return {'image': rescaled_img,
                 'depth': depth,
                 'label': label}
     
+
+
+
+
+
+
+
+class PhotoMetricDistortion(object):
+    """Apply photometric distortion to image sequentially, every transformation
+    is applied with a probability of 0.5.
+
+    1. random brightness
+    2. random contrast (mode 0)
+    3. convert color from RGB to HSV
+    4. random saturation
+    5. random hue
+    6. convert color from HSV to RGB
+    7. random contrast (mode 1)
+    8. randomly swap channels
+
+    Args:
+        brightness_delta (int): delta of brightness.
+        contrast_range (tuple): range of contrast.
+        saturation_range (tuple): range of saturation.
+        hue_delta (int): delta of hue.
+    """
+
+    def __init__(self,
+                 brightness_delta=32,
+                 contrast_range=(0.5, 1.5),
+                 saturation_range=(0.5, 1.5),
+                 hue_delta=18):
+        self.brightness_delta = brightness_delta
+        self.contrast_lower, self.contrast_upper = contrast_range
+        self.saturation_lower, self.saturation_upper = saturation_range
+        self.hue_delta = hue_delta
+
+    def random_brightness(self, img):
+        if random.randint(0, 2):
+            brightness_factor = random.uniform(1 - self.brightness_delta, 1 + self.brightness_delta)
+            img = ImageEnhance.Brightness(img).enhance(brightness_factor)
+        return img
+
+    def random_contrast(self, img):
+        if random.randint(0, 2):
+            contrast_factor = random.uniform(self.contrast_lower, self.contrast_upper)
+            img = ImageEnhance.Contrast(img).enhance(contrast_factor)
+        return img
+
+    def random_saturation(self, img):
+        if random.randint(0, 2):
+            saturation_factor = random.uniform(self.saturation_lower, self.saturation_upper)
+            img = ImageEnhance.Color(img).enhance(saturation_factor)
+        return img
+
+    def random_hue(self, img):
+        if random.randint(0, 2):
+            img = img.convert('HSV')
+            hue = random.randint(-self.hue_delta, self.hue_delta)
+            img = img.point(lambda i: (i + hue) % 256)
+            img = img.convert('RGB')
+        return img
+
+    def __call__(self, results):
+        img = results['image']
+
+        # Random brightness
+        img = self.random_brightness(img)
+
+        # Mode == 0 --> do random contrast first
+        # Mode == 1 --> do random contrast last
+        mode = random.randint(0, 2)
+        if mode == 1:
+            img = self.random_contrast(img)
+
+        # Random saturation
+        img = self.random_saturation(img)
+
+        # Random hue
+        img = self.random_hue(img)
+
+        # Random contrast
+        if mode == 0:
+            img = self.random_contrast(img)
+
+        results['image'] = img
+        return results
+
+
+
+
+
+
+
+
 
 
 class Normalize(object):
@@ -204,57 +293,56 @@ class RandomGaussianBlur(object):
 
 
 
-class RandomScaleCrop(object):
-    def __init__(self, base_size, crop_size, fill=0):
-        self.base_size = base_size
-        self.crop_size = crop_size
-        self.fill = fill
+# class RandomScaleCrop(object):
+#     def __init__(self, base_size, crop_size, fill=0):
+#         self.base_size = base_size
+#         self.crop_size = crop_size
+#         self.fill = fill
 
-    def __call__(self, sample):
-        img = sample['image']
-        mask = sample['label']
-        depth = sample['depth']
+#     def __call__(self, sample):
+#         img = sample['image']
+#         mask = sample['label']
+#         depth = sample['depth']
 
-        # random scale (short edge)
-        short_size = random.randint(int(self.base_size * 0.5), int(self.base_size * 2.0))
-        #### [256, 1024]
+#         # random scale (short edge)
+#         short_size = random.randint(int(self.base_size * 0.5), int(self.base_size * 2.0))
         
-        w, h = img.size #[2048, 1024]
+#         w, h = img.size
 
-        if h > w:
-            ow = short_size
-            oh = int(1.0 * h * ow / w)
-        else:
-            oh = short_size     
-            ow = int(1.0 * w * oh / h)  
-        mask = mask.resize((ow, oh), Image.NEAREST) 
-        # pad crop
-        if short_size < self.crop_size:
-            padh = self.crop_size - oh if oh < self.crop_size else 0
-            padw = self.crop_size - ow if ow < self.crop_size else 0
-            mask = ImageOps.expand(mask, border=(0, 0, padw, padh), fill=self.fill)
-        # random crop crop_size
-        w_resize, h_resize = mask.size      #2400, 1200
-        x1 = random.randint(0, w_resize - self.crop_size) # 1376
-        y1 = random.randint(0, h_resize - self.crop_size)   # 176
+#         if h > w:
+#             ow = short_size
+#             oh = int(1.0 * h * ow / w)
+#         else:
+#             oh = short_size     
+#             ow = int(1.0 * w * oh / h)  
+#         mask = mask.resize((ow, oh), Image.NEAREST) 
+#         # pad crop
+#         if short_size < self.crop_size:
+#             padh = self.crop_size - oh if oh < self.crop_size else 0
+#             padw = self.crop_size - ow if ow < self.crop_size else 0
+#             mask = ImageOps.expand(mask, border=(0, 0, padw, padh), fill=self.fill)
+#         # random crop crop_size
+#         w_resize, h_resize = mask.size      
+#         x1 = random.randint(0, w_resize - self.crop_size) 
+#         y1 = random.randint(0, h_resize - self.crop_size)   
 
-        #### (1376, 176, 2400, 1200) --> 1024 x 1024
-        mask = mask.crop((x1, y1, x1 + self.crop_size, y1 + self.crop_size))
+        
+#         mask = mask.crop((x1, y1, x1 + self.crop_size, y1 + self.crop_size))
 
-        img = img.resize((ow, oh), Image.BILINEAR)
-        if short_size < self.crop_size:
-            img = ImageOps.expand(img, border=(0, 0, padw, padh), fill=0)
-        img = img.crop((x1, y1, x1 + self.crop_size, y1 + self.crop_size))
+#         img = img.resize((ow, oh), Image.BILINEAR)
+#         if short_size < self.crop_size:
+#             img = ImageOps.expand(img, border=(0, 0, padw, padh), fill=0)
+#         img = img.crop((x1, y1, x1 + self.crop_size, y1 + self.crop_size))
 
-        if not isinstance(depth, list):
-            depth = depth.resize((ow, oh), Image.BILINEAR)
-            if short_size < self.crop_size:
-                depth = ImageOps.expand(depth, border=(0, 0, padw, padh), fill=0)
-            depth = depth.crop((x1, y1, x1 + self.crop_size, y1 + self.crop_size))
+#         if not isinstance(depth, list):
+#             depth = depth.resize((ow, oh), Image.BILINEAR)
+#             if short_size < self.crop_size:
+#                 depth = ImageOps.expand(depth, border=(0, 0, padw, padh), fill=0)
+#             depth = depth.crop((x1, y1, x1 + self.crop_size, y1 + self.crop_size))
 
-        return {'image': img,
-                'depth': depth,
-                'label': mask}
+#         return {'image': img,
+#                 'depth': depth,
+#                 'label': mask}
 
 
 class FixScaleCrop(object):
@@ -275,7 +363,7 @@ class FixScaleCrop(object):
             ow = self.crop_size
             oh = int(1.0 * h * ow / w)
 
-        mask = mask.resize((ow, oh), Image.NEAREST)
+        # mask = mask.resize((ow, oh), Image.NEAREST)
         # center crop
         w_resize, h_resize = mask.size
         x1 = int(round((w_resize - self.crop_size) / 2.))
@@ -285,9 +373,9 @@ class FixScaleCrop(object):
         img = img.resize((ow, oh), Image.BILINEAR)
         img = img.crop((x1, y1, x1 + self.crop_size, y1 + self.crop_size))
 
-        if not isinstance(depth, list):
-            depth = depth.resize((ow, oh), Image.BILINEAR)
-            depth = depth.crop((x1, y1, x1 + self.crop_size, y1 + self.crop_size))
+        # if not isinstance(depth, list):
+        #     depth = depth.resize((ow, oh), Image.BILINEAR)
+        #     depth = depth.crop((x1, y1, x1 + self.crop_size, y1 + self.crop_size))
 
         return {'image': img,
                 'depth': depth,

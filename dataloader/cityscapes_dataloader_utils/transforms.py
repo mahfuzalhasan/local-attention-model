@@ -1212,3 +1212,94 @@ class PhotoMetricDistortion(object):
                      f'{self.saturation_upper}), '
                      f'hue_delta={self.hue_delta})')
         return repr_str
+
+
+
+
+
+
+
+
+from PIL import Image, ImageFilter
+import random
+
+class PhotoMetricDistortion(object):
+    """Apply photometric distortion to image sequentially, every transformation
+    is applied with a probability of 0.5.
+
+    1. random brightness
+    2. random contrast (mode 0)
+    3. convert color from RGB to HSV
+    4. random saturation
+    5. random hue
+    6. convert color from HSV to RGB
+    7. random contrast (mode 1)
+    8. randomly swap channels
+
+    Args:
+        brightness_delta (int): delta of brightness.
+        contrast_range (tuple): range of contrast.
+        saturation_range (tuple): range of saturation.
+        hue_delta (int): delta of hue.
+    """
+
+    def __init__(self,
+                 brightness_delta=32,
+                 contrast_range=(0.5, 1.5),
+                 saturation_range=(0.5, 1.5),
+                 hue_delta=18):
+        self.brightness_delta = brightness_delta
+        self.contrast_lower, self.contrast_upper = contrast_range
+        self.saturation_lower, self.saturation_upper = saturation_range
+        self.hue_delta = hue_delta
+
+    def random_brightness(self, img):
+        if random.randint(2):
+            brightness_factor = random.uniform(1 - self.brightness_delta, 1 + self.brightness_delta)
+            img = ImageEnhance.Brightness(img).enhance(brightness_factor)
+        return img
+
+    def random_contrast(self, img):
+        if random.randint(2):
+            contrast_factor = random.uniform(self.contrast_lower, self.contrast_upper)
+            img = ImageEnhance.Contrast(img).enhance(contrast_factor)
+        return img
+
+    def random_saturation(self, img):
+        if random.randint(2):
+            saturation_factor = random.uniform(self.saturation_lower, self.saturation_upper)
+            img = ImageEnhance.Color(img).enhance(saturation_factor)
+        return img
+
+    def random_hue(self, img):
+        if random.randint(2):
+            img = img.convert('HSV')
+            hue = random.randint(-self.hue_delta, self.hue_delta)
+            img = img.point(lambda i: (i + hue) % 256)
+            img = img.convert('RGB')
+        return img
+
+    def __call__(self, results):
+        img = results['image']
+
+        # Random brightness
+        img = self.random_brightness(img)
+
+        # Mode == 0 --> do random contrast first
+        # Mode == 1 --> do random contrast last
+        mode = random.randint(2)
+        if mode == 1:
+            img = self.random_contrast(img)
+
+        # Random saturation
+        img = self.random_saturation(img)
+
+        # Random hue
+        img = self.random_hue(img)
+
+        # Random contrast
+        if mode == 0:
+            img = self.random_contrast(img)
+
+        results['image'] = img
+        return results
