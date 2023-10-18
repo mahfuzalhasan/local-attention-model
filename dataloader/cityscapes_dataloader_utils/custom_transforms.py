@@ -150,7 +150,6 @@ class RandomCrop(object):
         img = sample['image']
         img = np.array(img)
         crop_bbox = self.get_crop_bbox(img)
-        print("call ++++++++++++++++++++++++++ crop", crop_bbox)
         if self.cat_max_ratio < 1.:
             # Repeat 10 times
             for _ in range(10):
@@ -183,7 +182,6 @@ class Resize(object):
     def __init__(self, ratio_range):
         self.img_scale = None
         self.ratio_range = ratio_range
-        print("initial ++++++++++++++++++++++++++ resize")
         pass
 
     def _random_scale(self,):
@@ -219,10 +217,7 @@ class Resize(object):
         depth = sample['depth']
         
         self.img_scale = img.size
-
-        print("call ++img, label++ resize", img.size, label.size)
         scale = self._random_scale()
-        print("call +++ scale ", scale)
         rescaled_img = self._resize_img(img, scale)
         label = self._resize_label(label, scale)
 
@@ -348,9 +343,6 @@ class Normalize(object):
 
         mask = sample['label']
         mask = np.array(mask).astype(np.float32)
-        # print('################label in Augmentation###########')
-        # print(np.unique(mask))
-        # print('################################################')
 
         depth = sample['depth']
         if not isinstance(depth, list):
