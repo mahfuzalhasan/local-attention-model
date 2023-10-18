@@ -60,7 +60,7 @@ def Main(parser, cfg):
 
 
         cityscapes_train = CityscapesDataset(cfg, split='train')
-        train_loader = DataLoader(cityscapes_train, batch_size=8, shuffle=True, num_workers=4, drop_last=True)
+        train_loader = DataLoader(cityscapes_train, batch_size=2, shuffle=True, num_workers=4, drop_last=True)
         print(f'total train: {len(cityscapes_train)} t_iteration:{len(train_loader)}')
         cityscapes_val = CityscapesDataset(cfg, split='val')
         val_loader = DataLoader(cityscapes_val, batch_size=1, shuffle=False, num_workers=4)

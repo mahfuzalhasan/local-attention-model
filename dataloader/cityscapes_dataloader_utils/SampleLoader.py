@@ -101,10 +101,16 @@ class SampleLoader():
     def transform_tr(self, sample):
         
         composed_transforms = transforms.Compose([
+
+            # org_tr.Resize(img_scale=(2048, 1024), ratio_range=(0.5, 2.0)),
+            # org_tr.RandomCrop(crop_size=(1024, 1024), cat_max_ratio=0.75),
+            # org_tr.RandomFlip(prob=0.5),
+
             tr.Resize(ratio_range=(0.5, 2.0)),
-            tr.FixScaleCrop(crop_size=1024),
+            tr.RandomCrop(crop_size=(1024, 1024), cat_max_ratio=1),
+            tr.Pad(size=(1024, 1024), pad_val=0, seg_pad_val=255),
             tr.RandomHorizontalFlip(),
-            tr.PhotoMetricDistortion(),
+            # tr.PhotoMetricDistortion(),
             # tr.RandomDarken(self.cfg, self.darken),
             # #tr.RandomGaussianBlur(), #TODO Not working for depth channel
             tr.Normalize(mean=self.data_mean, std=self.data_std),
