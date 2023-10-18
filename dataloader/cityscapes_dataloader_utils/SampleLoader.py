@@ -102,9 +102,10 @@ class SampleLoader():
         
         composed_transforms = transforms.Compose([
             tr.Resize(ratio_range=(0.5, 2.0)),
-            tr.FixScaleCrop(crop_size=1024),
+            tr.RandomCrop(crop_size=(1024, 1024), cat_max_ratio=1),
+            tr.Pad(size=(1024, 1024), pad_val=0, seg_pad_val=255),
             tr.RandomHorizontalFlip(),
-            tr.PhotoMetricDistortion(),
+            # tr.PhotoMetricDistortion(),
             # tr.RandomDarken(self.cfg, self.darken),
             # #tr.RandomGaussianBlur(), #TODO Not working for depth channel
             tr.Normalize(mean=self.data_mean, std=self.data_std),
@@ -116,7 +117,7 @@ class SampleLoader():
 
         composed_transforms = transforms.Compose([
             # tr.FixScaleCrop(crop_size=self.crop_size),
-            tr.Darken(self.cfg),
+            # tr.Darken(self.cfg),
             tr.Normalize(mean=self.data_mean, std=self.data_std),
             tr.ToTensor()])
 

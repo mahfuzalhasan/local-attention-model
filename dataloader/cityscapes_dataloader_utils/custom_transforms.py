@@ -5,6 +5,176 @@ import torchvision
 import skimage
 
 from PIL import Image, ImageOps, ImageFilter, ImageEnhance
+import cv2
+
+
+
+class Pad(object):
+    """Pad the image & mask.
+
+    There are two padding modes: (1) pad to a fixed size and (2) pad to the
+    minimum size that is divisible by some number.
+    Added keys are "pad_shape", "pad_fixed_size", "pad_size_divisor",
+
+    Args:
+        size (tuple, optional): Fixed padding size.
+        size_divisor (int, optional): The divisor of padded size.
+        pad_val (float, optional): Padding value. Default: 0.
+        seg_pad_val (float, optional): Padding value of segmentation map.
+            Default: 255.
+    """
+
+    def __init__(self,
+                 size=None,
+                 size_divisor=None,
+                 pad_val=0,
+                 seg_pad_val=255):
+        self.size = size
+        self.size_divisor = size_divisor
+        self.pad_val = pad_val
+        self.seg_pad_val = seg_pad_val
+        # only one of size and size_divisor should be valid
+        assert size is not None or size_divisor is not None
+        assert size is None or size_divisor is None
+
+    def _pad_img(self, sample):
+        """Pad images according to ``self.size``."""
+        img = np.array(sample['image'])
+
+        if self.size is not None:
+            width = max(self.size[1] - img.shape[1], 0)
+            height = max(self.size[0] - img.shape[0], 0)
+            padding = (0, 0, width, height)
+
+        if self.size is not None:
+            img = cv2.copyMakeBorder(
+                            img,
+                            padding[1],
+                            padding[3],
+                            padding[0],
+                            padding[2],
+                            cv2.BORDER_CONSTANT,
+                            value=self.pad_val)
+        return img
+
+    def _pad_seg(self, sample):
+        """Pad masks according to ``results['pad_shape']``."""
+        label = np.array(sample['label'])
+
+        if self.size is not None:
+            width = max(self.size[1] - label.shape[1], 0)
+            height = max(self.size[0] - label.shape[0], 0)
+            padding = (0, 0, width, height)
+
+        if self.size is not None:
+            label = cv2.copyMakeBorder(
+                                    label,
+                                    padding[1],
+                                    padding[3],
+                                    padding[0],
+                                    padding[2],
+                                    cv2.BORDER_CONSTANT,
+                                    value=self.seg_pad_val)
+        return label
+
+    def __call__(self, sample):
+        """Call function to pad images, masks, semantic segmentation maps.
+
+        Args:
+            results (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Updated result dict.
+        """
+
+        img = self._pad_img(sample)
+        label = self._pad_seg(sample)
+
+        sample['image'] = Image.fromarray(img)
+        sample['label'] = Image.fromarray(label)
+        return sample
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__
+        repr_str += f'(size={self.size}, size_divisor={self.size_divisor}, ' \
+                    f'pad_val={self.pad_val})'
+        return repr_str
+
+
+
+
+
+class RandomCrop(object):
+    """Random crop the image & seg.
+
+    Args:
+        crop_size (tuple): Expected size after cropping, (h, w).
+        cat_max_ratio (float): The maximum ratio that single category could
+            occupy.
+    """
+
+    def __init__(self, crop_size, cat_max_ratio=1., ignore_index=255):
+        assert crop_size[0] > 0 and crop_size[1] > 0
+        self.crop_size = crop_size
+        self.cat_max_ratio = cat_max_ratio
+        self.ignore_index = ignore_index
+
+    def get_crop_bbox(self, img):
+        """Randomly get a crop bounding box."""
+        margin_h = max(img.shape[0] - self.crop_size[0], 0)
+        margin_w = max(img.shape[1] - self.crop_size[1], 0)
+        offset_h = np.random.randint(0, margin_h + 1)
+        offset_w = np.random.randint(0, margin_w + 1)
+        crop_y1, crop_y2 = offset_h, offset_h + self.crop_size[0]
+        crop_x1, crop_x2 = offset_w, offset_w + self.crop_size[1]
+
+        return crop_y1, crop_y2, crop_x1, crop_x2
+
+    def crop(self, img, crop_bbox):
+        """Crop from ``img``"""
+        crop_y1, crop_y2, crop_x1, crop_x2 = crop_bbox
+        img = img[crop_y1:crop_y2, crop_x1:crop_x2, ...]
+        return img
+
+    def __call__(self, sample):
+        """Call function to randomly crop images, semantic segmentation maps.
+
+        Args:
+            results (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Randomly cropped results, 'img_shape' key in result dict is
+                updated according to crop size.
+        """
+
+        img = sample['image']
+        img = np.array(img)
+        crop_bbox = self.get_crop_bbox(img)
+        if self.cat_max_ratio < 1.:
+            # Repeat 10 times
+            for _ in range(10):
+                seg_temp = self.crop(np.array(sample['label']), crop_bbox)
+                labels, cnt = np.unique(seg_temp, return_counts=True)
+                cnt = cnt[labels != self.ignore_index]
+                if len(cnt) > 1 and np.max(cnt) / np.sum(
+                        cnt) < self.cat_max_ratio:
+                    break
+                crop_bbox = self.get_crop_bbox(img)
+
+        # crop the image
+        img = self.crop(img, crop_bbox)
+        
+        # crop semantic seg
+        seg = self.crop(np.array(sample['label']), crop_bbox)
+        
+        sample['image'] = Image.fromarray(img)
+        sample['label'] = Image.fromarray(seg)
+        return sample
+
+    def __repr__(self):
+        return self.__class__.__name__ + f'(crop_size={self.crop_size})'
+
+
 
 
 
@@ -12,7 +182,6 @@ class Resize(object):
     def __init__(self, ratio_range):
         self.img_scale = None
         self.ratio_range = ratio_range
-        print("initial ++++++++++++++++++++++++++ resize")
         pass
 
     def _random_scale(self,):
@@ -48,10 +217,7 @@ class Resize(object):
         depth = sample['depth']
         
         self.img_scale = img.size
-
-        print("call ++img, label++ resize", img.size, label.size)
         scale = self._random_scale()
-        print("call +++ scale ", scale)
         rescaled_img = self._resize_img(img, scale)
         label = self._resize_label(label, scale)
 
@@ -177,9 +343,6 @@ class Normalize(object):
 
         mask = sample['label']
         mask = np.array(mask).astype(np.float32)
-        # print('################label in Augmentation###########')
-        # print(np.unique(mask))
-        # print('################################################')
 
         depth = sample['depth']
         if not isinstance(depth, list):
