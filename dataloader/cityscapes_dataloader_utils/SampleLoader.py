@@ -48,6 +48,7 @@ class SampleLoader():
             sample = self.transform_norm(sample)
         else:
             ### CityScape w = 2048 H = 1024
+
             if self.split in ['train', 'train_extra']:
                 sample = self.transform_tr(sample)
             elif self.split == 'val':
@@ -114,8 +115,8 @@ class SampleLoader():
     def transform_val(self, sample):
 
         composed_transforms = transforms.Compose([
-            tr.FixScaleCrop(crop_size=self.crop_size),
-            tr.Darken(self.cfg),
+            # tr.FixScaleCrop(crop_size=self.crop_size),
+            # tr.Darken(self.cfg),
             tr.Normalize(mean=self.data_mean, std=self.data_std),
             tr.ToTensor()])
 
