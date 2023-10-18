@@ -58,12 +58,6 @@ class Resize(object):
         return {'image': rescaled_img,
                 'depth': depth,
                 'label': label}
-    
-
-
-
-
-
 
 
 class PhotoMetricDistortion(object):
@@ -147,15 +141,6 @@ class PhotoMetricDistortion(object):
         results['image'] = img
         return results
 
-
-
-
-
-
-
-
-
-
 class Normalize(object):
     """Normalize a tensor image with mean and standard deviation.
     Args:
@@ -191,7 +176,6 @@ class Normalize(object):
         return {'image': img,
                 'depth': depth,
                 'label': mask}
-
 
 class ToTensor(object):
     """Convert ndarrays in sample to Tensors."""
