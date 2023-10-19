@@ -6,6 +6,26 @@ from einops import rearrange, repeat
 import math
 import time
 
+def get_relative_position_index(win_h: int, win_w: int) -> torch.Tensor:
+    """Function to generate pair-wise relative position index for each token inside the window.
+        Taken from Timms Swin V1 implementation.
+    Args:
+        win_h (int): Window/Grid height.
+        win_w (int): Window/Grid width.
+    Returns:
+        relative_coords (torch.Tensor): Pair-wise relative position indexes [height * width, height * width].
+    """
+    coords = torch.stack(torch.meshgrid([torch.arange(win_h), torch.arange(win_w)]))
+    coords_flatten = torch.flatten(coords, 1)
+    relative_coords = coords_flatten[:, :, None] - coords_flatten[:, None, :]
+    relative_coords = relative_coords.permute(1, 2, 0).contiguous()
+    relative_coords[:, :, 0] += win_h - 1
+    relative_coords[:, :, 1] += win_w - 1
+    relative_coords[:, :, 0] *= 2 * win_w - 1
+    return relative_coords.sum(-1)
+
+# ms_attention = MultiScaleAttention(512, num_heads=8, sr_ratio=8, local_region_shape=[2, 2, 2, 2, 1, 1, 1, 1])
+
 class MultiScaleAttention(nn.Module):
     def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0., sr_ratio=1, local_region_shape = [4, 8, 40]):
         super().__init__()
@@ -23,6 +43,19 @@ class MultiScaleAttention(nn.Module):
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
+        
+        # # Define a parameter table of relative position bias, shape: 2*Wh-1 * 2*Ww-1, nH
+        self.relative_position_bias_table = nn.Parameter(
+            torch.zeros((2 * dim - 1) * (2 * dim - 1), num_heads)
+        )
+        
+        # Get pair-wise relative position index for each token inside the window
+        self.register_buffer(
+            "relative_position_index",
+            get_relative_position_index(dim, dim).view(-1),
+        )
+        # Init relative positional bias
+        trunc_normal_(self.relative_position_bias_table, std=0.02)
 
         self.sr_ratio = sr_ratio
         if sr_ratio > 1:
@@ -30,6 +63,15 @@ class MultiScaleAttention(nn.Module):
             self.norm = nn.LayerNorm(dim)
         self.apply(self._init_weights)
 
+    def _get_relative_positional_bias(self) -> torch.Tensor:
+        """Returns the relative positional bias.
+        Returns:
+            relative_position_bias (torch.Tensor): Relative positional bias.
+        """
+        relative_position_bias = self.relative_position_bias_table[self.relative_position_index].view(self.attn_area, self.attn_area, -1)
+        relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()
+        return relative_position_bias.unsqueeze(0)
+    
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
             trunc_normal_(m.weight, std=.02)
@@ -44,7 +86,6 @@ class MultiScaleAttention(nn.Module):
             m.weight.data.normal_(0, math.sqrt(2.0 / fan_out))
             if m.bias is not None:
                 m.bias.data.zero_()
-
 
     """ arr.shape -> B x num_head x H x W x C """
     """ arr.shape -> B x num_head x H x W x C """
