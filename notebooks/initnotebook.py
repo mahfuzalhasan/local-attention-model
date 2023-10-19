@@ -10,7 +10,8 @@ try:
     sys.path.remove(str(currentFolder))
 except ValueError: # Already removed
     pass
-projectFolder = '/home/abjawad/Documents/GitHub/local-attention-model'
+
+projectFolder = 'C:/Users/abjawad/Documents/GitHub/local-attention-model'
 sys.path.append(str(projectFolder))
 os.chdir(projectFolder)
 print( f"current working dir{os.getcwd()}")
