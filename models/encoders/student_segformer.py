@@ -32,6 +32,10 @@ from engine.logger import get_logger
 
 logger = get_logger()
 
+from visualizer.visualizer import *
+output_dir = '/home/abjawad/Documents/GitHub/local-attention-model/visualizer/images'
+
+
 
 class DWConv(nn.Module):
     """
@@ -169,10 +173,12 @@ class OverlapPatchEmbed(nn.Module):
 
     def forward(self, x):
         # B C H W
+        print('x before proj: ',x.shape)
         x = self.proj(x)
-        # print('x after proj: ',x.shape)
+        print('x after proj: ',x.shape)
         _, _, H, W = x.shape
         x = x.flatten(2).transpose(1, 2)
+        print('x after flatten: ',x.shape)
         # B H*W/16 C
         x = self.norm(x)
 
@@ -318,16 +324,20 @@ class RGBXTransformer(nn.Module):
         """
         x_rgb: B x N x H x W
         """
-        # print('input: ',x_rgb.shape)
+        print('input: ', x_rgb.shape)
         B = x_rgb.shape[0]
         outs = []
         outs_fused = []
 
+        save_input_image(x_rgb, 'input', output_dir)
+
         # stage 1
         x_rgb, H, W = self.patch_embed1(x_rgb)
 
-        #print('############### Stage 1 ##########################')
-        #print('tokenization: ',x_rgb.shape)
+        print('############### Stage 1 ##########################')
+        print('tokenization: ',x_rgb.shape)
+
+        save_image_after_tokenization(x_rgb, H, W, 'stage1', output_dir)
 
         # exit()
         # B H*W/16 C
@@ -337,16 +347,21 @@ class RGBXTransformer(nn.Module):
         x_rgb = self.norm1(x_rgb)
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         outs.append(x_rgb)
-        #print('output: ',x_rgb.shape)
-        #print("******** End Stage 1 **************")
+        print('output: ',x_rgb.shape)
+
+        save_after_block(x_rgb, 'Bstage1', output_dir)
+
+        print("******** End Stage 1 **************")
         
         
 
         # stage 2
-        #print('############### Stage 2 ##########################')
+        print('############### Stage 2 ##########################')
         x_rgb, H, W = self.patch_embed2(x_rgb)
-        #print('tokenization: ',x_rgb.shape)
+        print('tokenization: ',x_rgb.shape)
         
+        save_image_after_tokenization(x_rgb, H, W, 'stage2', output_dir)
+
         for i, blk in enumerate(self.block2):
             x_rgb = blk(x_rgb, H, W)
         
@@ -354,15 +369,20 @@ class RGBXTransformer(nn.Module):
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         outs.append(x_rgb)
 
-        #print('output: ',x_rgb.shape)
-        #print("******** End Stage 2 **************")
+        print('output: ',x_rgb.shape)
+
+        save_after_block(x_rgb, 'Bstage2', output_dir)
+
+        print("******** End Stage 2 **************")
         
 
         # stage 3
         x_rgb, H, W = self.patch_embed3(x_rgb)
-        #print('############### Stage 3 ##########################')
-        #print('tokenization: ',x_rgb.shape)
+        print('############### Stage 3 ##########################')
+        print('tokenization: ',x_rgb.shape)
         
+        save_image_after_tokenization(x_rgb, H, W, 'stage3', output_dir)
+            
         for i, blk in enumerate(self.block3):
             x_rgb = blk(x_rgb, H, W)
         
@@ -370,23 +390,31 @@ class RGBXTransformer(nn.Module):
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         outs.append(x_rgb)
 
-        #print('output: ',x_rgb.shape)
-        #print("******** End Stage 3 **************")
+        print('output: ',x_rgb.shape)
+
+        save_after_block(x_rgb, 'Bstage3', output_dir)
+
+        print("******** End Stage 3 **************")
         
 
         # stage 4
         x_rgb, H, W = self.patch_embed4(x_rgb)
-        #print('############### Stage 4 ##########################')
-        #print('tokenization: ',x_rgb.shape)
+        print('############### Stage 4 ##########################')
+        print('tokenization: ',x_rgb.shape)
         
+        save_image_after_tokenization(x_rgb, H, W, 'stage4', output_dir)
+
         for i, blk in enumerate(self.block4):
             x_rgb = blk(x_rgb, H, W)
         x_rgb = self.norm4(x_rgb)
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         outs.append(x_rgb)
 
-        #print('output: ',x_rgb.shape)
-        #print("******** End Stage 4 **************")
+        print('output: ',x_rgb.shape)
+
+        save_after_block(x_rgb, 'Bstage4', output_dir)
+
+        print("******** End Stage 4 **************")
         
         return outs
 
