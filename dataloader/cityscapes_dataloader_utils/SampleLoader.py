@@ -101,6 +101,11 @@ class SampleLoader():
     def transform_tr(self, sample):
         
         composed_transforms = transforms.Compose([
+
+            # org_tr.Resize(img_scale=(2048, 1024), ratio_range=(0.5, 2.0)),
+            # org_tr.RandomCrop(crop_size=(1024, 1024), cat_max_ratio=0.75),
+            # org_tr.RandomFlip(prob=0.5),
+
             tr.Resize(ratio_range=(0.5, 2.0)),
             tr.RandomCrop(crop_size=(1024, 1024), cat_max_ratio=1),
             tr.Pad(size=(1024, 1024), pad_val=0, seg_pad_val=255),
@@ -125,8 +130,6 @@ class SampleLoader():
 
     def transform_ts(self, sample):
 
-        # print(f'mean:{self.data_mean} var:{self.data_std}')
-        # print('')
         composed_transforms = transforms.Compose([
             tr.FixedResize(size=self.crop_size),
             tr.Darken(self.cfg),

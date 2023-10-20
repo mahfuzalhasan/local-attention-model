@@ -60,67 +60,34 @@ def val_cityscape(epoch, val_loader, model):
     unique_values = []
     with torch.no_grad():
         for idx, sample in enumerate(val_loader):
-            imgs = sample['image']
-            gts = sample['label']
+            imgs = sample['image']      #B, 3, 1024, 2048
+            gts = sample['label']       #B, 1024, 2048
             imgs = imgs.to(f'cuda:{model.device_ids[0]}', non_blocking=True)
-            gts = gts.to(f'cuda:{model.device_ids[0]}', non_blocking=True)  
+            gts = gts.to(f'cuda:{model.device_ids[0]}', non_blocking=True)
 
-            # print('imgs, gts:', imgs.size(), gts.size())
-
-            # u_val = torch.unique(gts)
-            # u_val = u_val.detach().cpu().numpy()
-            # u_val = list(u_val)
-            
-            # if len(u_val) > 1:
-            #     print('path: ',sample['id'])
-            #     print('uval for sample: ',u_val)
-
-            # unique_values.extend(u_val)
-
-            # if idx%500 == 0:
-            #     print(f'{idx}th sample')
-            #     print('unique_values: ',len(unique_values))
-
-
-            aux_rate = 0.2
             imgs_1, imgs_2 = imgs[:, :, :, :1024], imgs[:, :, :, 1024:]
             gts_1, gts_2 = gts[:, :, :1024], gts[:, :, 1024:]
-            
             loss_1, out_1 = model(imgs_1, gts_1)
             loss_2, out_2 = model(imgs_2, gts_2)
 
             out = torch.cat((out_1, out_2), dim = 3)
-            # print('out: ',out.size())
-            # print(f'imgs:{imgs.shape} gts:{gts.shape}')
-            # print(f'loss:{loss} out:{out.shape}')
 
             # mean over multi-gpu result
             loss = torch.mean(loss_1) + torch.mean(loss_2)
-            # print('loss: ',loss)
-
+            #miou using torchmetric library
             m_iou = cal_mean_iou(out, gts)
-
-            # print('miou from lib: ',m_iou)
-            # exit()
-
-            
 
             score = out[0]      #1, C, H, W --> C, H, W = 19, H, W
             score = torch.exp(score)    
             score = score.permute(1, 2, 0)  #H,W,C
-            # print('gts score:',gts.shape, score.shape)
             pred = score.argmax(2)  #H,W
             
             pred = pred.detach().cpu().numpy()
             gts = gts[0].detach().cpu().numpy() #1, H, W --> H, W
-            # print(pred.shape, gts.shape)
-            # exit()
             confusionMatrix, labeled, correct = hist_info(config.num_classes, pred, gts)
-
             results_dict = {'hist': confusionMatrix, 'labeled': labeled, 'correct': correct}
             all_results.append(results_dict)
 
-            # compute_score(confusionMatrix, labeled, correct)
             m_iou_batches.append(m_iou)
 
             sum_loss += loss
@@ -142,7 +109,6 @@ def val_cityscape(epoch, val_loader, model):
         print('result: ',result_dict)
         val_mean_iou = np.mean(np.asarray(m_iou_batches))
         print(f"########## epoch:{epoch} mean_iou:{result_dict['mean_iou']} ############")
-
-        print(f"########## mean_iou using library:{val_mean_iou} ############")
-
+        print(f"########## mean_iou using torchmetric library:{val_mean_iou} ############")
+        
         return val_loss, result_dict['mean_iou']

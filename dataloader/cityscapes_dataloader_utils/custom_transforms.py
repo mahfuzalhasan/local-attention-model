@@ -569,10 +569,10 @@ class FixedResize(object):
 # Based on method from
 #  Structure-Revealing Low-Light Image EnhancementVia Robust Retinex Model.
 #          Li et al. Transactions on Image Processing, 2018.
-# "We synthesize low-light images by  first  applying Gamma correction(withγ=2.2)  (...)
+# "We synthesize low-light images by  first  applying Gamma correction(with?=2.2)  (...)
 #  and  then  adding Poisson noise and white Gaussian noise to Gamma corrected images.
 #  In our work, we use the built-in function of MATLAB imnoise to generate Poisson noise.
-#  For Gaussian noise, we use σ=5  to  simulate  the  noise  level  in  most  natural  low-light images."
+#  For Gaussian noise, we use s=5  to  simulate  the  noise  level  in  most  natural  low-light images."
 class RandomDarken(object):
     def __init__(self, cfg, darken):
         self.darken = darken

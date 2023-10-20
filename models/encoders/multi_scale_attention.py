@@ -88,7 +88,7 @@ class MultiScaleAttention(nn.Module):
         kv = self.kv(x).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         k, v = kv[0], kv[1]
         
-        print(f' k:{k.shape} v:{v.shape} q:{q.shape}')
+        # print(f' k:{k.shape} v:{v.shape} q:{q.shape}')
         # print('############################################')
         self.attn_outcome_per_head = []
         for i in range(self.num_heads):

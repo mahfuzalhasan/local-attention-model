@@ -55,7 +55,7 @@ C.norm_std = np.array([0.229, 0.224, 0.225])
 
 """ Settings for network, this would be different for each kind of model"""
 C.backbone = 'mit_b2' # Remember change the path below.
-C.pretrained_model = osp.join(C.root_dir, 'pretrained/mit_b2.pth')
+C.pretrained_model = osp.join(C.root_dir, 'pretrained/mit_b2_imagenet.pth')
 #C.pretrained_model = "../../Results/saved_models/NYUDV2_CMX+Segformer-B2.pth"
 C.decoder = 'MLPDecoder'
 C.decoder_embed_dim = 512
