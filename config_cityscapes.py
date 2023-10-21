@@ -50,8 +50,8 @@ C.class_names =  ['wall','floor','cabinet','bed','chair','sofa','table','door','
 C.background = 255
 C.image_height = 513
 C.image_width = 513
-C.norm_mean = np.array([0.485, 0.456, 0.406])
-C.norm_std = np.array([0.229, 0.224, 0.225])
+# C.norm_mean = np.array([0.485, 0.456, 0.406]) for NyUdv2
+# C.norm_std = np.array([0.229, 0.224, 0.225])
 
 """ Settings for network, this would be different for each kind of model"""
 C.backbone = 'mit_b2' # Remember change the path below.

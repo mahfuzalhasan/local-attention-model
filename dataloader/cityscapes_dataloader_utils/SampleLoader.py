@@ -100,26 +100,28 @@ class SampleLoader():
 
     def transform_tr(self, sample):
         
-        composed_transforms = transforms.Compose([
+        composed_transforms = transforms.Compose([            
+            ###############Not good result from both ours and vanila SegF
+            #### this is mmcv_aug
+            # tr.Resize(ratio_range=(0.5, 2.0)),
+            # tr.RandomCrop(crop_size=(1024, 1024), cat_max_ratio=1),
+            # tr.Pad(size=(1024, 1024), pad_val=0, seg_pad_val=255),
+            # tr.RandomHorizontalFlip(),
+            ###################
 
-            # org_tr.Resize(img_scale=(2048, 1024), ratio_range=(0.5, 2.0)),
-            # org_tr.RandomCrop(crop_size=(1024, 1024), cat_max_ratio=0.75),
-            # org_tr.RandomFlip(prob=0.5),
-
-            tr.Resize(ratio_range=(0.5, 2.0)),
-            tr.RandomCrop(crop_size=(1024, 1024), cat_max_ratio=1),
-            tr.Pad(size=(1024, 1024), pad_val=0, seg_pad_val=255),
+            ########### Best Result from this set
+            ### this is our augmentation
+            tr.RandomScaleCrop(base_size=self.base_size, crop_size=self.crop_size, fill=255),
+            tr.RandomDarken(self.cfg, self.darken),
             tr.RandomHorizontalFlip(),
-            # tr.PhotoMetricDistortion(),
-            # tr.RandomDarken(self.cfg, self.darken),
-            # #tr.RandomGaussianBlur(), #TODO Not working for depth channel
+            ###########
             tr.Normalize(mean=self.data_mean, std=self.data_std),
             tr.ToTensor()])
 
         return composed_transforms(sample)
 
     def transform_val(self, sample):
-
+        # print(f'mean: {self.data_mean} std:{self.data_std}')
         composed_transforms = transforms.Compose([
             # tr.FixScaleCrop(crop_size=self.crop_size),
             # tr.Darken(self.cfg),
