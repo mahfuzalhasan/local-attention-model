@@ -53,7 +53,7 @@ def compute_metric(results):
         labeled += d['labeled']
         count += 1
     iou, mean_IoU, _, freq_IoU, mean_pixel_acc, pixel_acc = compute_score(hist, correct, labeled)
-    print(f'iou:{iou} miou:{mean_IoU}')
+    print(f'iou per class:{iou} miou:{mean_IoU}')
     result_dict = dict(mean_iou=mean_IoU, freq_iou=freq_IoU, mean_pixel_acc=mean_pixel_acc)
     return result_dict
 
@@ -63,15 +63,15 @@ def val_cityscape(epoch, val_loader, model):
     m_iou_batches = []
     all_results = []
     unique_values = []
-    path = './output_check'
+    # path = './output_check'
 
-    invTrans = transforms.Compose([ transforms.Normalize(mean = [ 0., 0., 0. ],
-                                                     std = [ 1/0.190, 1/0.190, 1/0.185 ]),
-                                transforms.Normalize(mean = [ -291, -0.329, -0.291 ],
-                                                     std = [ 1., 1., 1. ]),
-                               ])
-    data_mean = np.asarray([0.291,  0.329,  0.291])
-    data_std = np.asarray([0.190,  0.190,  0.185])
+    # invTrans = transforms.Compose([ transforms.Normalize(mean = [ 0., 0., 0. ],
+    #                                                  std = [ 1/0.190, 1/0.190, 1/0.185 ]),
+    #                             transforms.Normalize(mean = [ -291, -0.329, -0.291 ],
+    #                                                  std = [ 1., 1., 1. ]),
+    #                            ])
+    # data_mean = np.asarray([0.291,  0.329,  0.291])
+    # data_std = np.asarray([0.190,  0.190,  0.185])
     with torch.no_grad():
         for idx, sample in enumerate(val_loader):
             imgs = sample['image']      #B, 3, 1024, 2048
@@ -101,6 +101,9 @@ def val_cityscape(epoch, val_loader, model):
             confusionMatrix, labeled, correct = hist_info(config.num_classes, pred, gts)
             results_dict = {'hist': confusionMatrix, 'labeled': labeled, 'correct': correct}
             all_results.append(results_dict)
+            # if idx==2:
+            #     print(all_results)
+            #     # exit()
 
             # m_iou_batches.append(m_iou)
 
@@ -121,7 +124,7 @@ def val_cityscape(epoch, val_loader, model):
 
         print(f"\n $$$$$$$ evaluating in epoch:{epoch} $$$$$$$ \n")
         print('result: ',result_dict)
-        val_mean_iou = np.mean(np.asarray(m_iou_batches))
+        # val_mean_iou = np.mean(np.asarray(m_iou_batches))
         print(f"########## epoch:{epoch} mean_iou:{result_dict['mean_iou']} ############")
         # print(f"########## mean_iou using torchmetric library:{val_mean_iou} ############")
         
