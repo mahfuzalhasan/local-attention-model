@@ -6,6 +6,7 @@ import argparse
 from tqdm import tqdm
 from datetime import datetime
 import numpy as np
+import cv2
 
 import torch
 from  torch.utils.data import DataLoader
@@ -13,6 +14,10 @@ import torch.nn as nn
 import torch.distributed as dist
 import torch.backends.cudnn as cudnn
 from torch.nn.parallel import DistributedDataParallel, DataParallel
+
+import torchvision
+from torchvision import transforms
+from torchvision.utils import save_image
 
 ## Dataset-specific imports
 # from config import config
@@ -58,10 +63,20 @@ def val_cityscape(epoch, val_loader, model):
     m_iou_batches = []
     all_results = []
     unique_values = []
+    path = './output_check'
+
+    invTrans = transforms.Compose([ transforms.Normalize(mean = [ 0., 0., 0. ],
+                                                     std = [ 1/0.190, 1/0.190, 1/0.185 ]),
+                                transforms.Normalize(mean = [ -291, -0.329, -0.291 ],
+                                                     std = [ 1., 1., 1. ]),
+                               ])
+    data_mean = np.asarray([0.291,  0.329,  0.291])
+    data_std = np.asarray([0.190,  0.190,  0.185])
     with torch.no_grad():
         for idx, sample in enumerate(val_loader):
             imgs = sample['image']      #B, 3, 1024, 2048
             gts = sample['label']       #B, 1024, 2048
+            
             imgs = imgs.to(f'cuda:{model.device_ids[0]}', non_blocking=True)
             gts = gts.to(f'cuda:{model.device_ids[0]}', non_blocking=True)
 
@@ -71,11 +86,10 @@ def val_cityscape(epoch, val_loader, model):
             loss_2, out_2 = model(imgs_2, gts_2)
 
             out = torch.cat((out_1, out_2), dim = 3)
-
             # mean over multi-gpu result
             loss = torch.mean(loss_1) + torch.mean(loss_2)
             #miou using torchmetric library
-            m_iou = cal_mean_iou(out, gts)
+            # m_iou = cal_mean_iou(out, gts)
 
             score = out[0]      #1, C, H, W --> C, H, W = 19, H, W
             score = torch.exp(score)    
@@ -88,7 +102,7 @@ def val_cityscape(epoch, val_loader, model):
             results_dict = {'hist': confusionMatrix, 'labeled': labeled, 'correct': correct}
             all_results.append(results_dict)
 
-            m_iou_batches.append(m_iou)
+            # m_iou_batches.append(m_iou)
 
             sum_loss += loss
 
@@ -109,6 +123,6 @@ def val_cityscape(epoch, val_loader, model):
         print('result: ',result_dict)
         val_mean_iou = np.mean(np.asarray(m_iou_batches))
         print(f"########## epoch:{epoch} mean_iou:{result_dict['mean_iou']} ############")
-        print(f"########## mean_iou using torchmetric library:{val_mean_iou} ############")
+        # print(f"########## mean_iou using torchmetric library:{val_mean_iou} ############")
         
         return val_loss, result_dict['mean_iou']
