@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import torchvision.transforms as transforms
 from PIL import Image
 
-
+# plot all channel separately
 def save_image_after_tokenization(data, H, W, filename, outDir):
     if outDir is None:
         raise Exception('outDir is None')
@@ -20,7 +20,7 @@ def save_image_after_tokenization(data, H, W, filename, outDir):
     # Calculate the channel-wise mean
     avg_image = torch.mean(data, dim=2)
 
-    # Convert the tensor to a NumPy array
+    # Convert the tensor
     avg_image = avg_image.cpu()
 
     avg_image = transforms.ToPILImage()(avg_image)
