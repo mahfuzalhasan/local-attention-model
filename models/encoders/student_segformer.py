@@ -33,7 +33,7 @@ from engine.logger import get_logger
 logger = get_logger()
 
 from visualizer.visualizer import *
-output_dir = '/home/abjawad/Documents/GitHub/local-attention-model/visualizer/images'
+output_dir = '/home/UFAD/mdmahfuzalhasan/Documents/Projects/local-attention-model/check_output'
 
 
 
@@ -131,10 +131,11 @@ class Block(nn.Module):
                 m.bias.data.zero_()
 
     def forward(self, x, H, W):
-        x = x + self.drop_path(self.attn(self.norm1(x), H, W))
+        attn_out = self.attn(self.norm1(x), H, W)
+        x = x + self.drop_path(attn_out)
         x = x + self.drop_path(self.mlp(self.norm2(x), H, W))
 
-        return x
+        return x, attn_out
 
 
 class OverlapPatchEmbed(nn.Module):
@@ -320,11 +321,12 @@ class RGBXTransformer(nn.Module):
         else:
             raise TypeError('pretrained must be a str or None')
 
-    def forward_features(self, x_rgb):
+    def forward_features(self, x_rgb, visualize=False, attention=False):
         """
         x_rgb: B x N x H x W
         """
         print('input: ', x_rgb.shape)
+        attention_matrices = []
         B = x_rgb.shape[0]
         outs = []
         outs_fused = []
@@ -336,20 +338,21 @@ class RGBXTransformer(nn.Module):
 
         print('############### Stage 1 ##########################')
         print('tokenization: ',x_rgb.shape)
-
-        save_image_after_tokenization(x_rgb, H, W, 'stage1', output_dir)
-
-        # exit()
-        # B H*W/16 C
-       
+        if visualize:
+            save_image_after_tokenization(x_rgb, H, W, 'patch_embed_1', output_dir)
+        
         for i, blk in enumerate(self.block1):
-            x_rgb = blk(x_rgb, H, W)
+            x_rgb, attn_matrix = blk(x_rgb, H, W)
+            if i==len(self.block1)-1:
+                if attention:
+                    attention_matrices.append(attn_matrix)
+
         x_rgb = self.norm1(x_rgb)
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         outs.append(x_rgb)
         print('output: ',x_rgb.shape)
 
-        save_after_block(x_rgb, 'Bstage1', output_dir)
+        # save_after_block(x_rgb, 'Bstage1', output_dir)
 
         print("******** End Stage 1 **************")
         
@@ -359,11 +362,15 @@ class RGBXTransformer(nn.Module):
         print('############### Stage 2 ##########################')
         x_rgb, H, W = self.patch_embed2(x_rgb)
         print('tokenization: ',x_rgb.shape)
-        
-        save_image_after_tokenization(x_rgb, H, W, 'stage2', output_dir)
+        if visualize:
+            save_image_after_tokenization(x_rgb, H, W, 'patch_embed_2', output_dir)
 
         for i, blk in enumerate(self.block2):
-            x_rgb = blk(x_rgb, H, W)
+            x_rgb, attn_matrix = blk(x_rgb, H, W)
+            if i==len(self.block2)-1:
+                if attention:
+                    attention_matrices.append(attn_matrix)
+
         
         x_rgb = self.norm2(x_rgb)
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
@@ -371,7 +378,7 @@ class RGBXTransformer(nn.Module):
 
         print('output: ',x_rgb.shape)
 
-        save_after_block(x_rgb, 'Bstage2', output_dir)
+        # save_after_block(x_rgb, 'Bstage2', output_dir)
 
         print("******** End Stage 2 **************")
         
@@ -380,11 +387,14 @@ class RGBXTransformer(nn.Module):
         x_rgb, H, W = self.patch_embed3(x_rgb)
         print('############### Stage 3 ##########################')
         print('tokenization: ',x_rgb.shape)
-        
-        save_image_after_tokenization(x_rgb, H, W, 'stage3', output_dir)
+        if visualize:
+            save_image_after_tokenization(x_rgb, H, W, 'patch_embed_3', output_dir)
             
         for i, blk in enumerate(self.block3):
-            x_rgb = blk(x_rgb, H, W)
+            x_rgb, attn_matrix = blk(x_rgb, H, W)
+            if i==len(self.block3)-1:
+                if attention:
+                    attention_matrices.append(attn_matrix)
         
         x_rgb = self.norm3(x_rgb)
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
@@ -392,7 +402,7 @@ class RGBXTransformer(nn.Module):
 
         print('output: ',x_rgb.shape)
 
-        save_after_block(x_rgb, 'Bstage3', output_dir)
+        # save_after_block(x_rgb, 'Bstage3', output_dir)
 
         print("******** End Stage 3 **************")
         
@@ -401,25 +411,30 @@ class RGBXTransformer(nn.Module):
         x_rgb, H, W = self.patch_embed4(x_rgb)
         print('############### Stage 4 ##########################')
         print('tokenization: ',x_rgb.shape)
-        
-        save_image_after_tokenization(x_rgb, H, W, 'stage4', output_dir)
+        if visualize:
+            save_image_after_tokenization(x_rgb, H, W, 'patch_embed_4', output_dir)
 
         for i, blk in enumerate(self.block4):
-            x_rgb = blk(x_rgb, H, W)
+            x_rgb, attn_matrix = blk(x_rgb, H, W)
+            if i==len(self.block4)-1:
+                if attention:
+                    attention_matrices.append(attn_matrix)
         x_rgb = self.norm4(x_rgb)
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         outs.append(x_rgb)
 
         print('output: ',x_rgb.shape)
 
-        save_after_block(x_rgb, 'Bstage4', output_dir)
+        # save_after_block(x_rgb, 'Bstage4', output_dir)
 
         print("******** End Stage 4 **************")
-        
-        return outs
+        if attention:
+            return outs, attention_matrices
+        else:
+            return outs
 
-    def forward(self, x_rgb):
-        out = self.forward_features(x_rgb)
+    def forward(self, x_rgb, visualize=False, attention=False):
+        out = self.forward_features(x_rgb, visualize, attention)
         return out
 
 

@@ -105,24 +105,35 @@ class EncoderDecoder(nn.Module):
                 self.norm_layer, cfg.bn_eps, cfg.bn_momentum,
                 mode='fan_in', nonlinearity='relu')
 
-    def encode_decode(self, rgb):
+    def encode_decode(self, rgb, visualize=False, attention = False):
         """Encode images with backbone and decode into a semantic segmentation
         map of the same size as input."""
         orisize = rgb.shape
-        x = self.backbone(rgb)
+        
+        if not attention:
+            x = self.backbone(rgb, visualize)
+        else:
+            x, attention_matrices = self.backbone(rgb, visualize, attention)
+
         out = self.decode_head.forward(x)
         out = F.interpolate(out, size=orisize[2:], mode='bilinear', align_corners=False)
         if self.aux_head:
             aux_fm = self.aux_head(x[self.aux_index])
             aux_fm = F.interpolate(aux_fm, size=orisize[2:], mode='bilinear', align_corners=False)
             return out, aux_fm
-        return out
-
-    def forward(self, rgb, label):
-        if self.aux_head:
-            out, aux_fm = self.encode_decode(rgb)
+        if not attention:
+            return out
         else:
-            out = self.encode_decode(rgb)
+            return out, attention_matrices
+
+    def forward(self, rgb, label, visualize=False, attention=False):
+        if self.aux_head:
+            out, aux_fm = self.encode_decode(rgb, visualize)
+        else:
+            if not attention:
+                out = self.encode_decode(rgb, visualize)
+            else:
+                out, attention_matrices = self.encode_decode(rgb, visualize, attention)
             # print(f'#############output: {out.size()}')
             # print(out)
 
@@ -137,4 +148,7 @@ class EncoderDecoder(nn.Module):
         # print(f'loss:{loss}')
         if self.aux_head:
             loss += self.aux_rate * self.criterion(aux_fm, label.long())
-        return loss, out
+        if not attention:
+            return loss, out
+        else:
+            return loss, out, attention_matrices
