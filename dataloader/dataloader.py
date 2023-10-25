@@ -55,6 +55,9 @@ class TrainPre(object):
         return p_rgb, p_gt, p_modal_x
 
 class ValPre(object):
+    def __init__(self, norm_mean, norm_std):
+        self.norm_mean = norm_mean
+        self.norm_std = norm_std
     def __call__(self, rgb, gt, modal_x):
         # rgb = normalize(rgb, self.norm_mean, self.norm_std)
         # modal_x = normalize(modal_x, self.norm_mean, self.norm_std)

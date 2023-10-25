@@ -52,7 +52,7 @@ C.norm_std = np.array([0.229, 0.224, 0.225])
 
 """ Settings for network, this would be different for each kind of model"""
 C.backbone = 'mit_b2' # Remember change the path below.
-C.pretrained_model = osp.join(C.root_dir, 'pretrained/mit_b2.pth')
+C.pretrained_model = osp.join(C.root_dir, 'pretrained/mit_b2_imagenet.pth')
 #C.pretrained_model = "../../Results/saved_models/NYUDV2_CMX+Segformer-B2.pth"
 C.decoder = 'MLPDecoder'
 C.decoder_embed_dim = 512
@@ -66,7 +66,7 @@ C.weight_decay = 0.01
 C.batch_size = 8
 C.nepochs = 500
 C.niters_per_epoch = C.num_train_imgs // C.batch_size  + 1
-C.num_workers = 16
+C.num_workers = 4
 C.train_scale_array = [0.5, 0.75, 1, 1.25, 1.5, 1.75]
 C.warm_up_epoch = 10
 
@@ -74,15 +74,15 @@ C.fix_bias = True
 C.bn_eps = 1e-3
 C.bn_momentum = 0.1
 C.print_stats = 30
-C.device_ids = [0, 1] # for mahdi
-#C.device_ids = [0, 1, 2, 3] # for sakin
+# C.device_ids = [0, 1] # for mahdi
+C.device_ids = [0, 1, 2, 3] # for sakin
 C.resume_train = False 
 C.resume_model_path = osp.join(C.root_dir, 'Results/saved_models/07-10-23_2314/model_330.pth')
 
 """Eval Config"""
 C.eval_iter = 25
 C.eval_stride_rate = 2 / 3
-C.eval_scale_array = [1] # [0.75, 1, 1.25] # 
+C.eval_scale_array = [0.75, 1, 1.25] # 
 C.eval_flip = False # True # 
 C.eval_crop_size = [480, 640] # [height width]
 

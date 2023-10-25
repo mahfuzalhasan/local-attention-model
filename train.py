@@ -128,7 +128,7 @@ with Engine(custom_parser=parser) as engine:
     
     # total epoch
     # for epoch in range(engine.state.epoch, config.nepochs+1):
-    for epoch in range(starting_epoch, config.nepochs):
+    for epoch in range(starting_epoch, config.nepochs+1):
         if engine.distributed:
             train_sampler.set_epoch(epoch)
         bar_format = '{desc}[{elapsed}<{remaining},{rate_fmt}]'
