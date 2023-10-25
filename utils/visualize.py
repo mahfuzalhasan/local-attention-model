@@ -1,6 +1,35 @@
 import numpy as np
 import cv2
 import scipy.io as sio
+import os
+import sys
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_dir)
+parent_dir = os.path.abspath(os.path.join(current_dir, os.pardir)) 
+sys.path.append(parent_dir)
+
+model_dir = os.path.abspath(os.path.join(parent_dir, os.pardir))
+sys.path.append(model_dir)
+
+
+def unnormalize_img_numpy(imgs):
+    """ # imgs: Torch: B, C, H, W
+    # idx --> batch iindex
+    #path --> save path """
+    data_mean = np.asarray([0.291,  0.329,  0.291])
+    data_std = np.asarray([0.190,  0.190,  0.185]) 
+    # print(' images shape: ',imgs.shape)
+    # for i in range(imgs.shape[0]):
+    ### Assuming batch size 1
+    n_img = imgs[0].permute(1, 2, 0).detach().cpu().numpy()
+    # print('numpy image shape: ',n_img.shape)
+    for i in range(3):
+        n_img[:, :, i] *= data_std[i]
+        n_img[:,:,i] += data_mean[i] 
+    n_img *= 255.0
+    n_img = np.array(n_img, dtype=np.uint8)
+    return n_img
+        
 
 def set_img_color(colors, background, img, pred, gt, show255=False):
     for i in range(0, len(colors)):
