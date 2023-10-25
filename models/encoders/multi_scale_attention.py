@@ -63,7 +63,9 @@ class MultiScaleAttention(nn.Module):
         attn = attn.softmax(dim=-1)      #  couldn't figure out yet
         attn = self.attn_drop(attn)
         x = (attn @ v)
-        return x
+        
+        return x, attn
+        
 
 
     def fuse_ms_attn_map(self, A, H, W):
@@ -79,7 +81,7 @@ class MultiScaleAttention(nn.Module):
         # print('final fused: ',output.shape)
         return output_small_patched_attn
 # f = torch.randn(B, 19200, 32).to(device) y = ms_attention(f, 120, 160)
-    def forward(self, x, H, W):
+    def forward(self, x, H, W, attn_out=False):
         ####print('!!!!!!!!!!!!attention head: ',self.num_heads, ' !!!!!!!!!!')
         A = []
         B, N, C = x.shape
@@ -91,6 +93,7 @@ class MultiScaleAttention(nn.Module):
         # print(f' k:{k.shape} v:{v.shape} q:{q.shape}')
         # print('############################################')
         self.attn_outcome_per_head = []
+        attn_matrix_per_head = []
         for i in range(self.num_heads):
             qh = q[:, i, :, :]
             qh = torch.unsqueeze(qh, dim=1)
@@ -98,11 +101,12 @@ class MultiScaleAttention(nn.Module):
             kh = torch.unsqueeze(kh, dim=1)
             vh = v[:, i, :, :]
             vh = torch.unsqueeze(vh, dim=1)
-            # print(f' head-wise k:{kh.shape} v:{vh.shape} q:{qh.shape}')
+            print(f'#### \n head-wise k:{kh.shape} v:{vh.shape} q:{qh.shape}\n #### \n')
             rg_shp = self.local_region_shape[i]
             if rg_shp == 1:
-                a_1 = self.attention(qh, kh, vh)
-                # print('global attn: ',a_1.shape)
+                a_1, attn_weight = self.attention(qh, kh, vh)
+                print(f'$$$$$$$$$$\n attn weight global : {attn_weight.shape} \n $$$$$$$$ \n' )
+             
             else:
                 q_patch = self.patchify(qh, H, W, rg_shp)
                 k_patch = self.patchify(kh, H, W, rg_shp)
@@ -112,12 +116,15 @@ class MultiScaleAttention(nn.Module):
                 # Grouping head will be experimented later
                 B_, Nh, Np, Ch = q_patch.shape
                 q_p, k_p, v_p = map(lambda t: rearrange(t, 'b h n d -> (b h) n d', h = Nh), (q_patch, k_patch, v_patch))
-                patched_attn = self.attention(q_p, k_p, v_p)
+                print(f'for local q_p:{q_p.shape}')
+                patched_attn, attn_weight = self.attention(q_p, k_p, v_p)
+                print(f'*********** \n attn weight local :{attn_weight.shape} \n *********** ')
                 patched_attn = patched_attn.view(B_, Nh, Np, Ch)
                 patched_attn = patched_attn.permute(0, 2, 1, 3).contiguous().reshape(B, N, Ch)
                 a_1 = patched_attn.unsqueeze(dim=1)
                 # print('final attn: ',a_1.shape)
             self.attn_outcome_per_head.append(a_1)
+            attn_matrix_per_head.append(attn_weight)
 
         #concatenating multi-scale outcome from different heads
         attn_fused = torch.cat(self.attn_outcome_per_head, axis=1)
@@ -126,21 +133,21 @@ class MultiScaleAttention(nn.Module):
         # print('fina attn_fused:',attn_fused.shape)
         attn_fused = self.proj(attn_fused)
         attn_fused = self.proj_drop(attn_fused )
-        return attn_fused
+        return attn_fused, attn_matrix_per_head
 
 if __name__=="__main__":
     # #######print(backbone)
-    B = 4
-    C = 3
-    H = 480
-    W = 640
+    B = 1
+    C = 512
+    H = 32
+    W = 32
     device = 'cuda:0'
     ms_attention = MultiScaleAttention(512, num_heads=8, sr_ratio=8, local_region_shape=[2, 2, 2, 2, 1, 1, 1, 1])
     ms_attention = ms_attention.to(device)
     # ms_attention = nn.DataParallel(ms_attention, device_ids = [0,1])
     # ms_attention.to(f'cuda:{ms_attention.device_ids[0]}', non_blocking=True)
 
-    f = torch.randn(B, 1024, 512).to(device)
+    f = torch.randn(B, H*W, 512).to(device)
     ##print(f'input to multiScaleAttention:{f.shape}')
-    y = ms_attention(f, 32, 32)
+    y = ms_attention(f, H, W)
     ##print('output: ',y.shape)

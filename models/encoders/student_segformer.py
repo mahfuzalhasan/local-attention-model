@@ -131,11 +131,11 @@ class Block(nn.Module):
                 m.bias.data.zero_()
 
     def forward(self, x, H, W):
-        attn_out = self.attn(self.norm1(x), H, W)
-        x = x + self.drop_path(attn_out)
+        y, attn_matrix_per_head = self.attn(self.norm1(x), H, W)
+        x = x + self.drop_path(y)
         x = x + self.drop_path(self.mlp(self.norm2(x), H, W))
 
-        return x, attn_out
+        return x, attn_matrix_per_head
 
 
 class OverlapPatchEmbed(nn.Module):
@@ -342,10 +342,10 @@ class RGBXTransformer(nn.Module):
             save_image_after_tokenization(x_rgb, H, W, 'patch_embed_1', output_dir)
         
         for i, blk in enumerate(self.block1):
-            x_rgb, attn_matrix = blk(x_rgb, H, W)
+            x_rgb, attn_matrix_per_head = blk(x_rgb, H, W)
             if i==len(self.block1)-1:
                 if attention:
-                    attention_matrices.append(attn_matrix)
+                    attention_matrices.append(attn_matrix_per_head)
 
         x_rgb = self.norm1(x_rgb)
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
@@ -366,10 +366,10 @@ class RGBXTransformer(nn.Module):
             save_image_after_tokenization(x_rgb, H, W, 'patch_embed_2', output_dir)
 
         for i, blk in enumerate(self.block2):
-            x_rgb, attn_matrix = blk(x_rgb, H, W)
+            x_rgb, attn_matrix_per_head = blk(x_rgb, H, W)
             if i==len(self.block2)-1:
                 if attention:
-                    attention_matrices.append(attn_matrix)
+                    attention_matrices.append(attn_matrix_per_head)
 
         
         x_rgb = self.norm2(x_rgb)
@@ -391,10 +391,10 @@ class RGBXTransformer(nn.Module):
             save_image_after_tokenization(x_rgb, H, W, 'patch_embed_3', output_dir)
             
         for i, blk in enumerate(self.block3):
-            x_rgb, attn_matrix = blk(x_rgb, H, W)
+            x_rgb, attn_matrix_per_head = blk(x_rgb, H, W)
             if i==len(self.block3)-1:
                 if attention:
-                    attention_matrices.append(attn_matrix)
+                    attention_matrices.append(attn_matrix_per_head)
         
         x_rgb = self.norm3(x_rgb)
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
@@ -415,10 +415,10 @@ class RGBXTransformer(nn.Module):
             save_image_after_tokenization(x_rgb, H, W, 'patch_embed_4', output_dir)
 
         for i, blk in enumerate(self.block4):
-            x_rgb, attn_matrix = blk(x_rgb, H, W)
+            x_rgb, attn_matrix_per_head = blk(x_rgb, H, W)
             if i==len(self.block4)-1:
                 if attention:
-                    attention_matrices.append(attn_matrix)
+                    attention_matrices.append(attn_matrix_per_head)
         x_rgb = self.norm4(x_rgb)
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         outs.append(x_rgb)

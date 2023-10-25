@@ -61,16 +61,16 @@ def plot_attention(atn_h, output_folder, head_no):
     # avg = avg * 255.0
     # avg = np.array(avg, dtype=np.uint8)
     # cv2.imwrite(os.path.join(output_folder, f'avg_h_avg_c.jpg'), avg)
-    # head_folder = os.path.join(output_folder, str(head_no))
-    # if not os.path.exists(head_folder):
-    #     os.makedirs(head_folder)
+    head_folder = os.path.join(output_folder, str(head_no))
+    if not os.path.exists(head_folder):
+        os.makedirs(head_folder)
     for c in range(atn_h.shape[2]):
         single_head = atn_h[:, :, c]
         single_head = single_head.detach().cpu().numpy()
         single_head = single_head * 255.0
         single_head = np.array(single_head, dtype=np.uint8)
         
-        cv2.imwrite(os.path.join(output_folder, f'h_{head_no}.jpg'), single_head)
+        cv2.imwrite(os.path.join(head_folder, f'c_{c}.jpg'), single_head)
 
 def val_cityscape(epoch, val_loader, model):
     model.eval()
@@ -90,7 +90,7 @@ def val_cityscape(epoch, val_loader, model):
             imgs_1, imgs_2 = imgs[:, :, :, :1024], imgs[:, :, :, 1024:]
             gts_1, gts_2 = gts[:, :, :1024], gts[:, :, 1024:]
             n_img = unnormalize_img_numpy(imgs_1)
-            # n_img = cv2.resize(n_img, (128, 128))
+            n_img = cv2.resize(n_img, (128, 128))
             cv2.imwrite(os.path.join(base_output_folder, f'batch_{idx}_1.jpg'), n_img)
             # exit()
 
@@ -100,38 +100,44 @@ def val_cityscape(epoch, val_loader, model):
             
             for i, attn_matrix_per_head in enumerate(attention_matrices):
                 # print(i, len(attn_matrix_per_head))
-                if i != len(attention_matrices)-2:
+                if i != len(attention_matrices)-1:
                     continue
                 num_heads = attn_heads[i]
                 print('nh: ',num_heads)
-                # B, N, C = attn_matrix.shape
+                B, N, C = attn_matrix.shape
                 # print('attn matrix: ',attn_matrix.shape)
-                # attn_matrix = attn_matrix.reshape(B, N, num_heads, C // num_heads).permute(0, 2, 1, 3)
-                # 256, 4, 4
-                for k, attn_matrix in enumerate(attn_matrix_per_head):
-                    print(f'head:{k} attn_m:{attn_matrix.shape}')
-                    attn_matrix, _ = torch.max(attn_matrix, dim=2)
-                    attn_matrix = attn_matrix.reshape(1024//(2**(i+2)), 1024//(2**(i+2)))
-                    print(f'head:{k} attn_m reshape:{attn_matrix.shape}')
-                    # exit()
+                attn_matrix = attn_matrix.reshape(B, N, num_heads, C // num_heads).permute(0, 2, 1, 3)
+                # # nh = attn_matrix.shape[1]  # number of head
+                # # attn_matrix = attn_matrix.mean(dim=1)
+                # attn_matrix = attn_matrix[0]
+                # atn_h = attn_matrix.reshape(1024//(2**(i+2)), 1024//(2**(i+2)), C//num_heads).permute(2,0,1)
+                # # print('atn_h before: ',atn_h.shape)
+                # factor = (4, 4)
+                # atn_h = nn.functional.interpolate(atn_h.unsqueeze(
+                #             0), scale_factor=factor, mode="nearest")[0]
+                # atn_h = atn_h.permute(1, 2, 0)
+                
+                # # print('atn_h after: ',atn_h.shape)
+                # stage = os.path.join(base_output_folder, f'attention_stage_{i}')
+                # if not os.path.exists(stage):
+                #     os.makedirs(stage)
+                # plot_attention(atn_h, stage, 0)
+                # print('attn matrix: ',attn_matrix.shape)
+                for k in range(num_heads):
+                    atn_h = attn_matrix[0, k, :, :]
                     # print('attn matrix head: ',atn_h.shape)
-                    # atn_h = atn_h.reshape(1024//(2**(i+2)), 1024//(2**(i+2)), C//num_heads).permute(2,0,1)
+                    atn_h = atn_h.reshape(1024//(2**(i+2)), 1024//(2**(i+2)), C//num_heads).permute(2,0,1)
                     # print('atn_h before: ',atn_h.shape)
                     factor = (4, 4)
-                    attn_matrix = attn_matrix.unsqueeze(0)
-                    attn_matrix = nn.functional.interpolate(attn_matrix.unsqueeze(
-                                0), scale_factor=16, mode="nearest")[0]
-                    print(f'head:{k} attn_m interpolate:{attn_matrix.shape}')
-
-                    attn_matrix = attn_matrix.permute(1, 2, 0) #  128,128,1
-
-                    # atn_h = atn_h.permute(1, 2, 0)
+                    atn_h = nn.functional.interpolate(atn_h.unsqueeze(
+                                0), scale_factor=factor, mode="nearest")[0]
+                    atn_h = atn_h.permute(1, 2, 0)
                     
                     # print('atn_h after: ',atn_h.shape)
                     stage = os.path.join(base_output_folder, f'attention_stage_{i}')
                     if not os.path.exists(stage):
                         os.makedirs(stage)
-                    plot_attention(attn_matrix, stage, k)
+                    plot_attention(atn_h, stage, k)
                     
                 exit()
                 
