@@ -138,10 +138,11 @@ if __name__ == "__main__":
                                  config.eval_scale_array, config.eval_flip,
                                  all_dev, args.verbose, args.save_path,
                                  args.show_image)
-        saved_model_path = os.path.join(config.checkpoint_dir, "10-23-23_0154")
+        saved_model_path = os.path.join(config.checkpoint_dir, "10-25-23_0620")
         """ segmentor.run(config.checkpoint_dir, "NYUDV2_CMX+Segformer-B2.pth", config.val_log_file,
                       config.link_val_log_file) """
-        model_id_list = [i for i in range(300, 350, 5)]
+        # model_id_list = [i for i in range(300, 350, 5)]
+        model_id_list = [300, 325, 350, 375, 400]
         for id in model_id_list:
             print(f'$$$$$$$$$$$$ \n testing model: {id}\n$$$$$$$$$$$$$$ ')
             segmentor.run(saved_model_path, f'model_{id}.pth', config.val_log_file,

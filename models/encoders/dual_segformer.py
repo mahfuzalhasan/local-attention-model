@@ -238,14 +238,14 @@ class RGBXTransformer(nn.Module):
         self.block2 = nn.ModuleList([Block(
             dim=embed_dims[1], num_heads=num_heads[1], mlp_ratio=mlp_ratios[1], qkv_bias=qkv_bias, qk_scale=qk_scale,
             drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur], norm_layer=norm_layer,
-            sr_ratio=sr_ratios[1], local_region_shape=[20, 10, 10, 5])
+            sr_ratio=sr_ratios[1], local_region_shape=[20, 10, 10, 10])
             for i in range(depths[1])])
         self.norm2 = norm_layer(embed_dims[1])
 
         self.extra_block2 = nn.ModuleList([Block(
             dim=embed_dims[1], num_heads=num_heads[1], mlp_ratio=mlp_ratios[1], qkv_bias=qkv_bias, qk_scale=qk_scale,
             drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur+1], norm_layer=norm_layer,
-            sr_ratio=sr_ratios[1], local_region_shape=[20, 10, 10, 5])
+            sr_ratio=sr_ratios[1], local_region_shape=[20, 10, 10, 10])
             for i in range(depths[1])])
         self.extra_norm2 = norm_layer(embed_dims[1])
 
@@ -270,14 +270,14 @@ class RGBXTransformer(nn.Module):
         self.block4 = nn.ModuleList([Block(
             dim=embed_dims[3], num_heads=num_heads[3], mlp_ratio=mlp_ratios[3], qkv_bias=qkv_bias, qk_scale=qk_scale,
             drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
-            sr_ratio=sr_ratios[3], local_region_shape=[5, 5, 5, 5, 1, 1, 1, 1])
+            sr_ratio=sr_ratios[3], local_region_shape=[5, 5, 5, 5, 5, 5, 5, 5])
             for i in range(depths[3])])
         self.norm4 = norm_layer(embed_dims[3])
 
         self.extra_block4 = nn.ModuleList([Block(
             dim=embed_dims[3], num_heads=num_heads[3], mlp_ratio=mlp_ratios[3], qkv_bias=qkv_bias, qk_scale=qk_scale,
             drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
-            sr_ratio=sr_ratios[3], local_region_shape=[5, 5, 5, 5, 1, 1, 1, 1])
+            sr_ratio=sr_ratios[3], local_region_shape=[5, 5, 5, 5, 5, 5, 5, 5])
             for i in range(depths[3])])
         self.extra_norm4 = norm_layer(embed_dims[3])
 
