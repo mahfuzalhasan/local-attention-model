@@ -78,9 +78,21 @@ C.bn_eps = 1e-3
 C.bn_momentum = 0.1
 C.train_print_stats = 50
 C.val_print_stats = 100
+
+user_name = os.environ['HOME'].split('/')[-1]
+match user_name:
+    case 'ma906813':
+        C.device_ids = [0] # for mahdi (lab-pc)
+    case 'mzaman':
+        C.device_ids = [0, 1] # for mahdi (newton)
+    case 'mdmahfuzalhasan':
+        C.device_ids = [0, 1, 2, 3] # for sakin
+    case 'abjawad':
+        C.device_ids = [0, 1] # for jawad 
 #C.device_ids = [0] # for mahdi (lab-pc)
-# C.device_ids = [0, 1] # for mahdi (newton)
-C.device_ids = [0, 1, 2, 3] # for sakin
+#C.device_ids = [0, 1] # for mahdi (newton)
+#C.device_ids = [0, 1, 2, 3] # for sakin
+
 C.resume_train = False 
 C.resume_model_path = osp.join(C.root_dir, 'Results/saved_models/07-10-23_2314/model_330.pth')
 
