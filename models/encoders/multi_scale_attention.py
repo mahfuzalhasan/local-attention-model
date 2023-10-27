@@ -5,6 +5,18 @@ from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 from einops import rearrange, repeat
 import math
 import time
+import sys
+import os
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_dir)
+parent_dir = os.path.abspath(os.path.join(current_dir, os.pardir)) 
+sys.path.append(parent_dir)
+
+model_dir = os.path.abspath(os.path.join(parent_dir, os.pardir))
+sys.path.append(model_dir)
+
+import config_cityscapes as cfg_cc
 
 
 def get_relative_position_index(win_h: int, win_w: int) -> torch.Tensor:
@@ -29,7 +41,10 @@ def get_rpe_per_head(local_region_shape):
     index_list = []
     i = 0
     for dim in local_region_shape:
-        index_list.append(get_relative_position_index(dim, dim).view(-1))
+        rpi = get_relative_position_index(dim, dim).view(-1)    #(256)
+        rpi = torch.unsqueeze(0)    #(1, 256)
+        rpi = rpi.repeat(cfg_cc.batch_size, 1)
+        index_list.append(rpi)
     return torch.nested.nested_tensor(index_list)
     
     
@@ -55,11 +70,19 @@ class MultiScaleAttention(nn.Module):
         self.proj_drop = nn.Dropout(proj_drop)
         
         # Define a parameter table of relative position bias, shape: 2*Wh-1 * 2*Ww-1, nH
+        # Each element of this table
+        # is a parameter list
+        # where for ith index it learns between which pair of pixels the distance will be i
         self.table_list = nn.ParameterList([nn.Parameter(torch.zeros((2 * window_size - 1) * (2 * window_size - 1), 1))
                                             for window_size in local_region_shape])
+
         # Get pair-wise relative position index for each token inside the window
         
+        # We need to pass the relative distance from index field
         self.register_buffer("index_list", get_rpe_per_head(self.local_region_shape))
+        for index in self.index_list:
+            print(index.size())
+        # print()
         # Get pair-wise relative position index for each token inside the window
         # self.index_list = []
         # for i in range(self.num_heads):
@@ -81,10 +104,14 @@ class MultiScaleAttention(nn.Module):
         """
         attn_area = attn_size * attn_size
         relative_position_bias_table = self.table_list[idx_h]
-        relative_position_index = self.index_list[idx_h]
+        print('table: ',relative_position_bias_table.shape)
+        relative_position_index = self.index_list[idx_h]    # B, 256/ B,16
+        print(relative_position_index.shape, torch.max(relative_position_index))
 
-        relative_position_bias = relative_position_bias_table[relative_position_index].view(attn_area, attn_area, -1)
+        relative_position_bias = relative_position_bias_table[relative_position_index[0]].view(attn_area, attn_area, -1)
+        print('relative_positional_bias: ',relative_position_bias.shape)
         relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()
+
         return relative_position_bias.unsqueeze(0)
     
     def _init_weights(self, m):
@@ -115,12 +142,12 @@ class MultiScaleAttention(nn.Module):
 
 
     def attention(self, q, k, v, head_index = None):
-        attn = (q @ k.transpose(-2, -1)) * self.scale   # scaling needs to be fixed
+        attn = (q @ k.transpose(-2, -1)) * self.scale   # scaling needs to be fixed# B_, 1, 64, 64
         # print('attn shape: ',attn.shape)
         print('###############')
         if head_index is not None:
             pos_bias = self._get_relative_positional_bias(head_index, self.local_region_shape[head_index])
-            print('pos bias shape: ',pos_bias.shape)
+            print('pos bias shape: ',pos_bias.shape)    # 1, 1 , 64, 64
             attn = (attn + pos_bias).softmax(dim=-1)      #  couldn't figure out yet
         else:
             attn = attn.softmax(dim=-1)
