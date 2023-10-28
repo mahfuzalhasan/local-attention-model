@@ -8,10 +8,10 @@ data/*
 pretrained/*
 output_check/*
 
-
 =======
 
 # mzaman
 Config/*
 *.slurm
 slurm_logs*/
+playground/*
