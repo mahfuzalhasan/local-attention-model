@@ -83,7 +83,7 @@ class Mlp(nn.Module):
 
     def forward(self, x, H, W):
         x = self.fc1(x)
-        x = self.dwconv(x, H, W)
+        x = self.dwconv(x, H, W)    # This acts as Global PE
         x = self.act(x)
         x = self.drop(x)
         x = self.fc2(x)
@@ -179,6 +179,7 @@ class OverlapPatchEmbed(nn.Module):
         return x, H, W
 
 
+# How to apply multihead multiscale
 class RGBXTransformer(nn.Module):
     def __init__(self, img_size=(480, 640), patch_size=16, in_chans=3, num_classes=1000, embed_dims=[64, 128, 256, 512], 
                  num_heads=[1, 2, 4, 8], mlp_ratios=[4, 4, 4, 4], qkv_bias=False, qk_scale=None, drop_rate=0.,
@@ -200,15 +201,6 @@ class RGBXTransformer(nn.Module):
         self.patch_embed4 = OverlapPatchEmbed(img_size=(img_size[0]// 16,img_size[1]//16), patch_size=3, stride=2, in_chans=embed_dims[2],
                                               embed_dim=embed_dims[3])
 
-        # self.extra_patch_embed1 = OverlapPatchEmbed(img_size=img_size, patch_size=7, stride=4, in_chans=in_chans,
-        #                                       embed_dim=embed_dims[0])
-        # self.extra_patch_embed2 = OverlapPatchEmbed(img_size=(img_size[0]// 4,img_size[1]//4), patch_size=3, stride=2, in_chans=embed_dims[0],
-        #                                       embed_dim=embed_dims[1])
-        # self.extra_patch_embed3 = OverlapPatchEmbed(img_size=(img_size[0]// 8,img_size[1]//8), patch_size=3, stride=2, in_chans=embed_dims[1],
-        #                                       embed_dim=embed_dims[2])
-        # self.extra_patch_embed4 = OverlapPatchEmbed(img_size=(img_size[0]// 16,img_size[1]//16), patch_size=3, stride=2, in_chans=embed_dims[2],
-        #                                       embed_dim=embed_dims[3])
-
         # transformer encoder
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]  # stochastic depth decay rule
         cur = 0
@@ -216,54 +208,38 @@ class RGBXTransformer(nn.Module):
         self.block1 = nn.ModuleList([Block(
             dim=embed_dims[0], num_heads=num_heads[0], mlp_ratio=mlp_ratios[0], qkv_bias=qkv_bias, qk_scale=qk_scale,
             drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
-            sr_ratio=sr_ratios[0], local_region_shape=[2, 4, 8])
+            sr_ratio=sr_ratios[0], local_region_shape=[16, 8])
             for i in range(depths[0])])
         self.norm1 = norm_layer(embed_dims[0])
 
-        # self.extra_block1 = nn.ModuleList([Block(
-        #     dim=embed_dims[0], num_heads=num_heads[0], mlp_ratio=mlp_ratios[0], qkv_bias=qkv_bias, qk_scale=qk_scale,
-        #     drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
-        #     sr_ratio=sr_ratios[0])
-        #     for i in range(depths[0])])
-        # self.extra_norm1 = norm_layer(embed_dims[0])
+       
         cur += depths[0]
 
         self.block2 = nn.ModuleList([Block(
             dim=embed_dims[1], num_heads=num_heads[1], mlp_ratio=mlp_ratios[1], qkv_bias=qkv_bias, qk_scale=qk_scale,
             drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
-            sr_ratio=sr_ratios[1], local_region_shape=[2, 4, 8])
+            sr_ratio=sr_ratios[1], local_region_shape=[16, 8, 8, 4])
             for i in range(depths[1])])
         self.norm2 = norm_layer(embed_dims[1])
 
-        # self.extra_block2 = nn.ModuleList([Block(
-        #     dim=embed_dims[1], num_heads=num_heads[1], mlp_ratio=mlp_ratios[1], qkv_bias=qkv_bias, qk_scale=qk_scale,
-        #     drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur+1], norm_layer=norm_layer,
-        #     sr_ratio=sr_ratios[1])
-        #     for i in range(depths[1])])
-        # self.extra_norm2 = norm_layer(embed_dims[1])
+        
 
         cur += depths[1]
 
         self.block3 = nn.ModuleList([Block(
             dim=embed_dims[2], num_heads=num_heads[2], mlp_ratio=mlp_ratios[2], qkv_bias=qkv_bias, qk_scale=qk_scale,
             drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
-            sr_ratio=sr_ratios[2], local_region_shape=[2, 4])
+            sr_ratio=sr_ratios[2], local_region_shape=[4, 4, 4, 2, 2])
             for i in range(depths[2])])
         self.norm3 = norm_layer(embed_dims[2])
 
-        # self.extra_block3 = nn.ModuleList([Block(
-        #     dim=embed_dims[2], num_heads=num_heads[2], mlp_ratio=mlp_ratios[2], qkv_bias=qkv_bias, qk_scale=qk_scale,
-        #     drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
-        #     sr_ratio=sr_ratios[2])
-        #     for i in range(depths[2])])
-        # self.extra_norm3 = norm_layer(embed_dims[2])
 
         cur += depths[2]
 
         self.block4 = nn.ModuleList([Block(
             dim=embed_dims[3], num_heads=num_heads[3], mlp_ratio=mlp_ratios[3], qkv_bias=qkv_bias, qk_scale=qk_scale,
             drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
-            sr_ratio=sr_ratios[3], local_region_shape=[2, 4])
+            sr_ratio=sr_ratios[3], local_region_shape=[4, 4, 2, 2, 2, 2, 2, 2])
             for i in range(depths[3])])
         self.norm4 = norm_layer(embed_dims[3])
 
@@ -325,19 +301,26 @@ class RGBXTransformer(nn.Module):
         # stage 1
         x_rgb, H, W = self.patch_embed1(x_rgb)
 
-        # print('tokenization: ',x_rgb.shape)
+        #print('############### Stage 1 ##########################')
+        #print('tokenization: ',x_rgb.shape)
 
         # exit()
         # B H*W/16 C
+       
         for i, blk in enumerate(self.block1):
             x_rgb = blk(x_rgb, H, W)
         x_rgb = self.norm1(x_rgb)
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         outs.append(x_rgb)
+        #print('output: ',x_rgb.shape)
+        #print("******** End Stage 1 **************")
+        
         
 
         # stage 2
+        #print('############### Stage 2 ##########################')
         x_rgb, H, W = self.patch_embed2(x_rgb)
+        #print('tokenization: ',x_rgb.shape)
         
         for i, blk in enumerate(self.block2):
             x_rgb = blk(x_rgb, H, W)
@@ -345,10 +328,15 @@ class RGBXTransformer(nn.Module):
         x_rgb = self.norm2(x_rgb)
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         outs.append(x_rgb)
+
+        #print('output: ',x_rgb.shape)
+        #print("******** End Stage 2 **************")
         
 
         # stage 3
         x_rgb, H, W = self.patch_embed3(x_rgb)
+        #print('############### Stage 3 ##########################')
+        #print('tokenization: ',x_rgb.shape)
         
         for i, blk in enumerate(self.block3):
             x_rgb = blk(x_rgb, H, W)
@@ -356,16 +344,24 @@ class RGBXTransformer(nn.Module):
         x_rgb = self.norm3(x_rgb)
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         outs.append(x_rgb)
+
+        #print('output: ',x_rgb.shape)
+        #print("******** End Stage 3 **************")
         
 
         # stage 4
         x_rgb, H, W = self.patch_embed4(x_rgb)
+        #print('############### Stage 4 ##########################')
+        #print('tokenization: ',x_rgb.shape)
         
         for i, blk in enumerate(self.block4):
             x_rgb = blk(x_rgb, H, W)
         x_rgb = self.norm4(x_rgb)
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         outs.append(x_rgb)
+
+        #print('output: ',x_rgb.shape)
+        #print("******** End Stage 4 **************")
         
         return outs
 
@@ -415,7 +411,7 @@ class mit_b1(RGBXTransformer):
 class mit_b2(RGBXTransformer):
     def __init__(self, fuse_cfg=None, **kwargs):
         super(mit_b2, self).__init__(
-            patch_size=4, embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[4, 4, 4, 4],
+            patch_size=4, embed_dims=[64, 128, 320, 512], num_heads=[2, 4, 5, 8], mlp_ratios=[4, 4, 4, 4],
             qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 4, 6, 3], sr_ratios=[8, 4, 2, 1],
             drop_rate=0.0, drop_path_rate=0.1)
 
@@ -442,3 +438,20 @@ class mit_b5(RGBXTransformer):
             patch_size=4, embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[4, 4, 4, 4],
             qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 6, 40, 3], sr_ratios=[8, 4, 2, 1],
             drop_rate=0.0, drop_path_rate=0.1)
+
+
+
+if __name__=="__main__":
+    backbone = mit_b2(norm_layer = nn.BatchNorm2d)
+    
+    # #######print(backbone)
+    B = 4
+    C = 3
+    H = 1024
+    W = 1024
+    device = 'cuda:0'
+    rgb = torch.randn(B, C, H, W)
+    x = torch.randn(B, C, H, W)
+    outputs = backbone(rgb)
+    # for output in outputs:
+    #     #print(output.size())

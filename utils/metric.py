@@ -13,7 +13,7 @@ def cal_mean_iou(pred, target):
     jaccard = JaccardIndex(task="multiclass", num_classes=score.shape[1], ignore_index = 255).to(score.get_device())    
     
     mean_iou = jaccard(score, target)
-    print('mean iou: ',mean_iou)
+    # print('mean iou: ',mean_iou)
     return mean_iou.detach().cpu().numpy()
 
 # gt = 255

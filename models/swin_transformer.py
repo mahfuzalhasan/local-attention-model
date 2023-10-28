@@ -51,7 +51,7 @@ def window_partition(x, window_size):
     Returns:
         windows: (num_windows*B, window_size, window_size, C)
     """
-    print('\n ^^^^^ Window Partition ^^^^^ \n')
+    # print('\n ^^^^^ Window Partition ^^^^^ \n')
     B, H, W, C = x.shape
     #print(x.shape)
     x = x.view(B, H // window_size, window_size, W // window_size, window_size, C)
@@ -143,12 +143,14 @@ class WindowAttention(nn.Module):
         print(f'\n &&&&&&&&&&&& q:{q.shape} k:{k.shape} v:{v.shape} &&&&&&&&&&& \n')
         q = q * self.scale
         attn = (q @ k.transpose(-2, -1))
+        print('attention out: ',attn.shape)
 
         relative_position_bias = self.relative_position_bias_table[self.relative_position_index.view(-1)].view(
             self.window_size[0] * self.window_size[1], self.window_size[0] * self.window_size[1], -1)  # Wh*Ww,Wh*Ww,nH
         relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()  # nH, Wh*Ww, Wh*Ww
+        print('relative positional bias: ',relative_position_bias.shape)
         attn = attn + relative_position_bias.unsqueeze(0)
-
+        # exit()
         if mask is not None:
             nW = mask.shape[0]
             attn = attn.view(B_ // nW, nW, self.num_heads, N, N) + mask.unsqueeze(1).unsqueeze(0)
@@ -252,6 +254,10 @@ class SwinTransformerBlock(nn.Module):
             attn_mask = attn_mask.masked_fill(attn_mask != 0, float(-100.0)).masked_fill(attn_mask == 0, float(0.0))
         else:
             attn_mask = None
+        
+        print('heads: ',num_heads)
+        if attn_mask is not None:
+            print(f'attention mask: {attn_mask.shape}')
 
         self.register_buffer("attn_mask", attn_mask)
         self.fused_window_process = fused_window_process
@@ -264,12 +270,14 @@ class SwinTransformerBlock(nn.Module):
         shortcut = x
         x = self.norm1(x)
         x = x.view(B, H, W, C)
+        print(f'x after reshape: {x.shape} shift size:{self.shift_size}')
 
         # cyclic shift
         if self.shift_size > 0:
             if not self.fused_window_process:
                 shifted_x = torch.roll(x, shifts=(-self.shift_size, -self.shift_size), dims=(1, 2))
                 # partition windows
+                print(f'shifted x: {x.shape}')
                 x_windows = window_partition(shifted_x, self.window_size)  # nW*B, window_size, window_size, C
             else:
                 x_windows = WindowProcess.apply(x, B, H, W, C, -self.shift_size, self.window_size)
@@ -280,9 +288,9 @@ class SwinTransformerBlock(nn.Module):
         
         print(f'\n final windowing outcome: {x_windows.shape} \n')
         x_windows = x_windows.view(-1, self.window_size * self.window_size, C)  # nW*B, window_size*window_size, C
-
         print(f'\n final windowing after reshaping: {x_windows.shape} \n')
         # W-MSA/SW-MSA
+        # exit()
         attn_windows = self.attn(x_windows, mask=self.attn_mask)  # nW*B, window_size*window_size, C
         print(f'\n %%%%%%%%%%% final attention: {attn_windows.shape} %%%%%%% \n')
         # merge windows
@@ -568,6 +576,7 @@ class SwinTransformer(nn.Module):
         # build layers
         self.layers = nn.ModuleList()
         for i_layer in range(self.num_layers):
+            print(f'############# Basic Layer :{i_layer} ###################')
             layer = BasicLayer(dim=int(embed_dim * 2 ** i_layer),
                                input_resolution=(patches_resolution[0] // (2 ** i_layer),
                                                  patches_resolution[1] // (2 ** i_layer)),
@@ -651,6 +660,7 @@ if __name__=="__main__":
     H = 224
     W = 224
     x = torch.randn(B, C, H, W)
+    print(f'input: {x.size()}')
     swinTransformer = SwinTransformer(img_size=224)
     y = swinTransformer(x)
 
