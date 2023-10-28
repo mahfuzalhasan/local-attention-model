@@ -5,6 +5,18 @@ from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 from einops import rearrange, repeat
 import math
 import time
+import sys
+import os
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_dir)
+parent_dir = os.path.abspath(os.path.join(current_dir, os.pardir)) 
+sys.path.append(parent_dir)
+
+model_dir = os.path.abspath(os.path.join(parent_dir, os.pardir))
+sys.path.append(model_dir)
+
+import config_cityscapes as cfg_cc
 
 
 def get_relative_position_index(win_h: int, win_w: int) -> torch.Tensor:
@@ -25,12 +37,15 @@ def get_relative_position_index(win_h: int, win_w: int) -> torch.Tensor:
     relative_coords[:, :, 0] *= 2 * win_w - 1
     return relative_coords.sum(-1)
 
-def get_rpe_per_head(local_region_shape):
-    index_list = []
-    i = 0
-    for dim in local_region_shape:
-        index_list.append(get_relative_position_index(dim, dim).view(-1))
-    return torch.nested.nested_tensor(index_list)
+# def get_rpe_per_head(local_region_shape):
+#     index_list = []
+#     i = 0
+#     for dim in local_region_shape:
+#         rpi = get_relative_position_index(dim, dim).view(-1)    #(256)
+#         rpi = torch.unsqueeze(0)    #(1, 256)
+#         rpi = rpi.repeat(cfg_cc.batch_size, 1)
+#         index_list.append(rpi)
+#     return torch.nested.nested_tensor(index_list)
     
     
 
@@ -55,18 +70,30 @@ class MultiScaleAttention(nn.Module):
         self.proj_drop = nn.Dropout(proj_drop)
         
         # Define a parameter table of relative position bias, shape: 2*Wh-1 * 2*Ww-1, nH
+        # Each element of this table
+        # is a parameter list
+        # where for ith index it learns between which pair of pixels the distance will be i
         self.table_list = nn.ParameterList([nn.Parameter(torch.zeros((2 * window_size - 1) * (2 * window_size - 1), 1))
                                             for window_size in local_region_shape])
+
         # Get pair-wise relative position index for each token inside the window
         
-        self.register_buffer("index_list", get_rpe_per_head(self.local_region_shape))
+        # We need to pass the relative distance from index field
+
+        # self.register_buffer("index_list", get_rpe_per_head(self.local_region_shape))
+        # for index in self.index_list:
+        #     #print(index.size())
+        # #print()
         # Get pair-wise relative position index for each token inside the window
         # self.index_list = []
         # for i in range(self.num_heads):
         #     window_size = self.local_region_shape[i]
         #     relative_position_index = get_relative_position_index(window_size, window_size).view(-1)
         #     self.index_list.append(relative_position_index)
-        # self.index_list = nn.ModuleList(self.index_list)
+        self.index_list = nn.ParameterList([nn.Parameter(get_relative_position_index(
+                                window_size, window_size).view(-1), requires_grad=False)
+                                    for window_size in local_region_shape
+                                    ])
 
         self.sr_ratio = sr_ratio
         if sr_ratio > 1:
@@ -81,10 +108,14 @@ class MultiScaleAttention(nn.Module):
         """
         attn_area = attn_size * attn_size
         relative_position_bias_table = self.table_list[idx_h]
-        relative_position_index = self.index_list[idx_h]
+        #print('table: ',relative_position_bias_table.shape)
+        relative_position_index = self.index_list[idx_h]    # B, 256/ B,16
+        #print('rpi: ',relative_position_index.shape, torch.max(relative_position_index))
 
         relative_position_bias = relative_position_bias_table[relative_position_index].view(attn_area, attn_area, -1)
+        #print('relative_positional_bias: ',relative_position_bias.shape)
         relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()
+
         return relative_position_bias.unsqueeze(0)
     
     def _init_weights(self, m):
@@ -106,7 +137,7 @@ class MultiScaleAttention(nn.Module):
     """ arr.shape -> B x num_head x H x W x C """
     # create overlapping patches
     def patchify(self, arr, H, W, patch_size):
-        # print(arr.shape)
+        # #print(arr.shape)
         unwrap = arr.view(arr.shape[0], arr.shape[1], H, W, arr.shape[3])
         B, Nh, H, W, Ch = unwrap.shape
         patches = unwrap.view(B, Nh, H // patch_size, patch_size, W // patch_size, patch_size, Ch)
@@ -115,18 +146,18 @@ class MultiScaleAttention(nn.Module):
 
 
     def attention(self, q, k, v, head_index = None):
-        attn = (q @ k.transpose(-2, -1)) * self.scale   # scaling needs to be fixed
-        # print('attn shape: ',attn.shape)
-        print('###############')
+        attn = (q @ k.transpose(-2, -1)) * self.scale   # scaling needs to be fixed# B_, 1, 64, 64
+        #print('attn shape before pe: ',attn.shape)
+        #print('###############')
         if head_index is not None:
             pos_bias = self._get_relative_positional_bias(head_index, self.local_region_shape[head_index])
-            print('pos bias shape: ',pos_bias.shape)
+            #print('pos bias shape in attention: ',pos_bias.shape)    # 1, 1 , 64, 64
             attn = (attn + pos_bias).softmax(dim=-1)      #  couldn't figure out yet
         else:
             attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
-        print('attn shape: ',attn.shape)
-        print('################')
+        #print('final attn shape: ',attn.shape)
+        #print('################')
         x = (attn @ v)
         return x
 
@@ -136,16 +167,16 @@ class MultiScaleAttention(nn.Module):
         output_small_patched_attn = A[1].permute(0, 2, 1).contiguous().view(B, C, H, W)
         # output_small_patched_attn = self.attn_fusion[0](output_small_patched_attn, output_small_patched_attn)
         global_attn = A[0].permute(0, 2, 1).contiguous().view(B, C, H, W)
-        ##print('shapes: ', output.shape, global_attn.shape)
+        ###print('shapes: ', output.shape, global_attn.shape)
         for i in range(2,len(A)):
             idx = i - 2
             output_small_patched_attn = self.attn_fusion[idx](output_small_patched_attn, A[i].permute(0, 2, 1).contiguous().view(B, C, H, W))
         output = self.global_fusion(output_small_patched_attn, global_attn)
-        # print('final fused: ',output.shape)
+        # #print('final fused: ',output.shape)
         return output_small_patched_attn
 
     def forward(self, x, H, W):
-        ####print('!!!!!!!!!!!!attention head: ',self.num_heads, ' !!!!!!!!!!')
+        #####print('!!!!!!!!!!!!attention head: ',self.num_heads, ' !!!!!!!!!!')
         A = []
         B, N, C = x.shape
         
@@ -153,8 +184,8 @@ class MultiScaleAttention(nn.Module):
         kv = self.kv(x).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         k, v = kv[0], kv[1]
         
-        # print(f' k:{k.shape} v:{v.shape} q:{q.shape}')
-        # print('############################################')
+        # #print(f' k:{k.shape} v:{v.shape} q:{q.shape}')
+        # #print('############################################')
         self.attn_outcome_per_head = []
         for i in range(self.num_heads):
             qh = q[:, i, :, :]
@@ -165,11 +196,11 @@ class MultiScaleAttention(nn.Module):
             vh = torch.unsqueeze(vh, dim=1)
 
 
-            # print(f' head-wise k:{kh.shape} v:{vh.shape} q:{qh.shape}')
+            # #print(f' head-wise k:{kh.shape} v:{vh.shape} q:{qh.shape}')
             rg_shp = self.local_region_shape[i]
             if rg_shp == 1:
                 a_1 = self.attention(qh, kh, vh)
-                # print('global attn: ',a_1.shape)
+                # #print('global attn: ',a_1.shape)
             else:
                 q_patch = self.patchify(qh, H, W, rg_shp)
                 k_patch = self.patchify(kh, H, W, rg_shp)
@@ -178,36 +209,36 @@ class MultiScaleAttention(nn.Module):
                 # Here Nh = 1 as we are working on per head.
                 # Grouping head will be experimented later
                 B_, Nh, Np, Ch = q_patch.shape
-                q_p, k_p, v_p = map(lambda t: rearrange(t, 'b h n d -> (b h) n d', h = Nh), (q_patch, k_patch, v_patch))
-                patched_attn = self.attention(q_p, k_p, v_p, i)
+                # q_p, k_p, v_p = map(lambda t: rearrange(t, 'b h n d -> (b h) n d', h = Nh), (q_patch, k_patch, v_patch))
+                patched_attn = self.attention(q_patch, k_patch, v_patch, i)
                 patched_attn = patched_attn.view(B_, Nh, Np, Ch)
                 patched_attn = patched_attn.permute(0, 2, 1, 3).contiguous().reshape(B, N, Ch)
                 a_1 = patched_attn.unsqueeze(dim=1)
-                # print('final attn: ',a_1.shape)
+                # #print('final attn: ',a_1.shape)
             self.attn_outcome_per_head.append(a_1)
 
         #concatenating multi-scale outcome from different heads
         attn_fused = torch.cat(self.attn_outcome_per_head, axis=1)
-        # print('attn_fused:',attn_fused.shape)
+        # #print('attn_fused:',attn_fused.shape)
         attn_fused = attn_fused.permute(0, 2, 1, 3).contiguous().reshape(B, N, C)
-        # print('fina attn_fused:',attn_fused.shape)
+        # #print('fina attn_fused:',attn_fused.shape)
         attn_fused = self.proj(attn_fused)
         attn_fused = self.proj_drop(attn_fused )
         return attn_fused
 
 if __name__=="__main__":
-    # #######print(backbone)
+    # ########print(backbone)
     B = 4
-    C = 32
+    C = 128
     H = 32
     W = 32
-    device = 'cuda:0'
-    ms_attention = MultiScaleAttention(C, num_heads=4, sr_ratio=8, local_region_shape=[8, 8, 4, 4])
-    ms_attention = ms_attention.to(device)
-    # ms_attention = nn.DataParallel(ms_attention, device_ids = [0,1])
-    # ms_attention.to(f'cuda:{ms_attention.device_ids[0]}', non_blocking=True)
+    # device = 'cuda:0'
+    ms_attention = MultiScaleAttention(C, num_heads=4, sr_ratio=8, local_region_shape=[2, 2, 4, 4])
+    # ms_attention = ms_attention.to(device)
+    ms_attention = nn.DataParallel(ms_attention, device_ids = [0,1,2,3])
+    ms_attention.to(f'cuda:{ms_attention.device_ids[0]}', non_blocking=True)
 
-    f = torch.randn(B, H*W, C).to(device)
-    print(f'input to multiScaleAttention:{f.shape}')
+    f = torch.randn(B, H*W, C).to(ms_attention.device_ids[0])
+    #print(f'input to multiScaleAttention:{f.shape}')
     y = ms_attention(f, H, W)
-    print('output: ',y.shape)
+    #print('output: ',y.shape)
