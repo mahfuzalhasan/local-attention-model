@@ -4,7 +4,7 @@ import torch
 import numpy as np
 
 from PIL import Image
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -22,6 +22,21 @@ class ADE20KSegmentation(SegmentationDataset):
         'train', 'val' or 'test'
     transform : callable, optional
         A function that transforms the image
+    Examples
+    --------
+    >>> from torchvision import transforms
+    >>> import torch.utils.data as data
+    >>> # Transforms for Normalization
+    >>> input_transform = transforms.Compose([
+    >>>     transforms.ToTensor(),
+    >>>     transforms.Normalize((.485, .456, .406), (.229, .224, .225)),
+    >>> ])
+    >>> # Create Dataset
+    >>> trainset = ADE20KSegmentation(split='train', transform=input_transform)
+    >>> # Create Training Loader
+    >>> train_data = data.DataLoader(
+    >>>     trainset, 4, shuffle=True,
+    >>>     num_workers=4)
     """
     BASE_DIR = 'images'
     NUM_CLASS = 150
@@ -60,10 +75,7 @@ class ADE20KSegmentation(SegmentationDataset):
         # general resize, normalize and to Tensor
         if self.transform is not None:
             img = self.transform(img)
-        sample['image'] = img
-        sample['label'] = mask
-        sample['id'] = os.path.basename(self.images[index])
-        return sample
+        return img, mask, os.path.basename(self.images[index])
 
     def _mask_transform(self, mask):
         return torch.LongTensor(np.array(mask).astype('int32') - 1)
@@ -194,10 +206,10 @@ if __name__ == '__main__':
     print(f'mask: {mask.shape}')
     print(f'path: {path}')
 
-    # fig, (ax1, ax2) = plt.subplots(1, 2)
-    # ax1.imshow(img)
-    # ax1.set_title('Image')
-    # ax2.imshow(mask)
-    # ax2.set_title('Mask')
-    # plt.show()
+    fig, (ax1, ax2) = plt.subplots(1, 2)
+    ax1.imshow(img)
+    ax1.set_title('Image')
+    ax2.imshow(mask)
+    ax2.set_title('Mask')
+    plt.show()
     

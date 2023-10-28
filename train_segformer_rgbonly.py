@@ -20,6 +20,7 @@ from config_cityscapes import config
 # from dataloader.dataloader import get_train_loader
 from dataloader.cityscapes_dataloader import get_train_loader
 from models.builder import EncoderDecoder as segmodel
+from dataloader.ade import ADE20KSegmentation
 # from dataloader.RGBXDataset import RGBXDataset
 from dataloader.cityscapes_dataloader import CityscapesDataset
 from val_segformer_rgbonly import val_cityscape
@@ -59,12 +60,12 @@ def Main(parser, cfg, args):
         # print('train dataloader size: ',len(train_loader))
 
 
-        cityscapes_train = CityscapesDataset(cfg, split='train')
-        train_loader = DataLoader(cityscapes_train, batch_size=8, shuffle=True, num_workers=4, drop_last=True)
-        print(f'total train: {len(cityscapes_train)} t_iteration:{len(train_loader)}')
-        cityscapes_val = CityscapesDataset(cfg, split='val')
-        val_loader = DataLoader(cityscapes_val, batch_size=1, shuffle=False, num_workers=4)
-        print(f'total val: {len(cityscapes_val)} v_iteration:{len(val_loader)}')
+        ade_train = ADE20KSegmentation(split='train', mode='train')
+        train_loader = DataLoader(ade_train, batch_size=16, shuffle=True, num_workers=4, drop_last=True)
+        print(f'total train: {len(ade_train)} t_iteration:{len(train_loader)}')
+        ade_val = ADE20KSegmentation(split='val', mode='val')
+        val_loader = DataLoader(ade_val, batch_size=1, shuffle=False, num_workers=4)
+        print(f'total val: {len(ade_val)} v_iteration:{len(val_loader)}')
         # exit()
         # if (engine.distributed and (engine.local_rank == 0)) or (not engine.distributed):
         #     tb_dir = config.tb_dir + '/{}'.format(time.strftime("%b%d_%d-%H-%M", time.localtime()))
