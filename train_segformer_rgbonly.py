@@ -78,7 +78,7 @@ def Main(parser, cfg, args):
         writer = SummaryWriter(save_log)
 
         # config network and criterion
-        criterion = nn.CrossEntropyLoss(reduction='mean', ignore_index=config.background)
+        criterion = nn.CrossEntropyLoss(reduction='mean', ignore_index=-1)
 
         if engine.distributed:
             BatchNorm2d = nn.SyncBatchNorm

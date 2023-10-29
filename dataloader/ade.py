@@ -4,11 +4,15 @@ import torch
 import numpy as np
 
 from PIL import Image
+import cv2
 # import matplotlib.pyplot as plt
 
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dataloader.segbase import SegmentationDataset
+
+import torchvision
+from torchvision import transforms
 
 
 class ADE20KSegmentation(SegmentationDataset):
@@ -26,9 +30,10 @@ class ADE20KSegmentation(SegmentationDataset):
     BASE_DIR = 'images'
     NUM_CLASS = 150
 
-    def __init__(self, root='../data/ade20k', split='train', mode=None, transform=None, **kwargs):
+    def __init__(self, root='./data/ade20k', split='train', mode=None, transform=None, **kwargs):
         super(ADE20KSegmentation, self).__init__(root, split, mode, transform, **kwargs)
         root = os.path.join(root, self.BASE_DIR)
+        print(root)
         assert os.path.exists(root), "{root} does not exist. Please fix the dataset path."
         self.images, self.masks = _get_ade20k_pairs(root, split) # TODO: fix annotation path for our setup . What does this return? ->
         assert (len(self.images) == len(self.masks))
@@ -37,7 +42,7 @@ class ADE20KSegmentation(SegmentationDataset):
         print('Found {} images in the folder {}'.format(len(self.images), root))
         if transform is None:
             self.transform = transforms.Compose([
-                    transforms.ToTensor(),
+                    transforms.ToTensor(),      # PIL --> 0-1
                     transforms.Normalize((.485, .456, .406), (.229, .224, .225)),
                 ])
 
@@ -49,6 +54,9 @@ class ADE20KSegmentation(SegmentationDataset):
                 img = self.transform(img)
             return img, os.path.basename(self.images[index])
         mask = Image.open(self.masks[index])
+        pixels = set(list(mask.getdata()))
+        print('unique in original mask: ',pixels)
+        
         # synchrosized transform
         if self.mode == 'train':
             img, mask = self._sync_transform(img, mask)
@@ -58,14 +66,18 @@ class ADE20KSegmentation(SegmentationDataset):
             assert self.mode == 'testval'
             img, mask = self._img_transform(img), self._mask_transform(mask)
         # general resize, normalize and to Tensor
+        # pixels = set(list(mask.getdata()))
+        print('unique in original mask after crop: ',torch.unique(mask))
         if self.transform is not None:
             img = self.transform(img)
+        sample = {}
         sample['image'] = img
         sample['label'] = mask
         sample['id'] = os.path.basename(self.images[index])
         return sample
 
     def _mask_transform(self, mask):
+        print("it's coming home")
         return torch.LongTensor(np.array(mask).astype('int32') - 1)
 
     def __len__(self):
@@ -144,6 +156,7 @@ class ADE20KSegmentation(SegmentationDataset):
 def _get_ade20k_pairs(folder, mode='train'):
     img_paths = []
     mask_paths = []
+    print('folder: ',folder)
     if mode == 'train':
         root_dir = os.path.join(folder, 'training')
         assert os.path.exists(root_dir), "{root_dir} does not exist. Please fix train path."
@@ -187,12 +200,37 @@ def _get_ade20k_pairs(folder, mode='train'):
 
 if __name__ == '__main__':
     # train_dataset = ADE20KSegmentation()
-    train_dataset = ADE20KSegmentation(split='val')
+    root = "/home/UFAD/mdmahfuzalhasan/Documents/Projects/local-attention-model/data/ade20k"
+    train_dataset = ADE20KSegmentation(root=root, split='train', mode='train')
 
-    img, mask, path = train_dataset.__getitem__(1)
+    classes = train_dataset.classes
+
+    print(len(classes))
+
+
+    sample = train_dataset.__getitem__(1)
+    img, mask, path = sample['image'], sample['label'], sample['id']
     print(f'img: {img.shape}')
     print(f'mask: {mask.shape}')
+    print('unique values: ',torch.unique(mask), mask.size())
+
+    mask = mask.detach().cpu().numpy()
+    print('unique numpy: ',np.unique(mask))
+    cv2.imwrite('mask.jpg', mask)
+
+    
+
+    
+
+    # img = img.detach().cpu().numpy()
+    # print('unique numpy img: ',np.unique(img))
+    # cv2.imwrite('img.jpg', img)
+
     print(f'path: {path}')
+
+
+
+    
 
     # fig, (ax1, ax2) = plt.subplots(1, 2)
     # ax1.imshow(img)

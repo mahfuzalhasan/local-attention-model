@@ -130,67 +130,73 @@
 # print('####q####' )
 # print(q, q.shape)
 # print('####padded k####')
-# print(k, k.shape)
-# k = k.unfold(1, kernel_size, 1).unfold(2, kernel_size, 1)
-# v = v.unfold(1, kernel_size, 1).unfold(2, kernel_size, 1)
-# print('######### After Folding k ##############')
-# print(k, k.shape)
+# # print(k, k.shape)
+# # k = k.unfold(1, kernel_size, 1).unfold(2, kernel_size, 1)
+# # v = v.unfold(1, kernel_size, 1).unfold(2, kernel_size, 1)
+# # print('######### After Folding k ##############')
+# # print(k, k.shape)
+# # # exit()
+
+# # k = k.reshape(height, width, channel, -1)
+# # v = v.reshape(height, width, channel, -1)
+# # q = q.reshape(height, width, channel, 1)
+# # print('@@@@@@@@ After Reshape @@@@@@@@@@@')
+# # print('q, k ,v: ',q.shape, k.shape, v.shape)
+# # print('####q####' )
+# # print(q)
+# # print('####k####' )
+# # print(k)
+
+# # qk = torch.matmul(q.transpose(2, 3), k)
+# # print('qk initial: ',qk.shape)
+
+# # qk = qk.reshape( height, width, kernel_size, kernel_size)
+# # print('qk: ',qk.shape, qk)
+
+# import torch
+# import torch.nn as nn
+
+# def get_relative_position_index(
+#         win_h: int,
+#         win_w: int
+# ) -> torch.Tensor:
+#     """ Function to generate pair-wise relative position index for each token inside the window.
+#         Taken from Timms Swin V1 implementation.
+#     Args:
+#         win_h (int): Window/Grid height.
+#         win_w (int): Window/Grid width.
+#     Returns:
+#         relative_coords (torch.Tensor): Pair-wise relative position indexes [height * width, height * width].
+#     """
+#     coords = torch.stack(torch.meshgrid([torch.arange(win_h), torch.arange(win_w)]))
+#     coords_flatten = torch.flatten(coords, 1)
+#     relative_coords = coords_flatten[:, :, None] - coords_flatten[:, None, :]
+#     relative_coords = relative_coords.permute(1, 2, 0).contiguous()
+#     relative_coords[:, :, 0] += win_h - 1
+#     relative_coords[:, :, 1] += win_w - 1
+#     relative_coords[:, :, 0] *= 2 * win_w - 1
+#     return relative_coords.sum(-1)
+# window_size = 2
+# num_heads = 2
+# # Define a parameter table of relative position bias, shape: 2*Wh-1 * 2*Ww-1, nH
+# relative_position_bias_table = nn.Parameter(
+#     torch.zeros((2 * window_size - 1) * (2 * window_size - 1), num_heads))
+# print(relative_position_bias_table)
+
+# index = get_relative_position_index(window_size, window_size).view(-1)
+# print(index)
+# relative_position_bias = relative_position_bias_table[index]
+
+# print(relative_position_bias, relative_position_bias.shape)
 # # exit()
-
-# k = k.reshape(height, width, channel, -1)
-# v = v.reshape(height, width, channel, -1)
-# q = q.reshape(height, width, channel, 1)
-# print('@@@@@@@@ After Reshape @@@@@@@@@@@')
-# print('q, k ,v: ',q.shape, k.shape, v.shape)
-# print('####q####' )
-# print(q)
-# print('####k####' )
-# print(k)
-
-# qk = torch.matmul(q.transpose(2, 3), k)
-# print('qk initial: ',qk.shape)
-
-# qk = qk.reshape( height, width, kernel_size, kernel_size)
-# print('qk: ',qk.shape, qk)
-
-import torch
-import torch.nn as nn
-
-def get_relative_position_index(
-        win_h: int,
-        win_w: int
-) -> torch.Tensor:
-    """ Function to generate pair-wise relative position index for each token inside the window.
-        Taken from Timms Swin V1 implementation.
-    Args:
-        win_h (int): Window/Grid height.
-        win_w (int): Window/Grid width.
-    Returns:
-        relative_coords (torch.Tensor): Pair-wise relative position indexes [height * width, height * width].
-    """
-    coords = torch.stack(torch.meshgrid([torch.arange(win_h), torch.arange(win_w)]))
-    coords_flatten = torch.flatten(coords, 1)
-    relative_coords = coords_flatten[:, :, None] - coords_flatten[:, None, :]
-    relative_coords = relative_coords.permute(1, 2, 0).contiguous()
-    relative_coords[:, :, 0] += win_h - 1
-    relative_coords[:, :, 1] += win_w - 1
-    relative_coords[:, :, 0] *= 2 * win_w - 1
-    return relative_coords.sum(-1)
-window_size = 2
-num_heads = 2
-# Define a parameter table of relative position bias, shape: 2*Wh-1 * 2*Ww-1, nH
-relative_position_bias_table = nn.Parameter(
-    torch.zeros((2 * window_size - 1) * (2 * window_size - 1), num_heads))
-print(relative_position_bias_table)
-
-index = get_relative_position_index(window_size, window_size).view(-1)
-print(index)
-relative_position_bias = relative_position_bias_table[index]
-
-print(relative_position_bias, relative_position_bias.shape)
-# exit()
-# Get pair-wise relative position index for each token inside the window
-# register_buffer("relative_position_index", get_relative_position_index(window_size,
-                                                                            # window_size).view(-1))
+# # Get pair-wise relative position index for each token inside the window
+# # register_buffer("relative_position_index", get_relative_position_index(window_size,
+#                                                                             # window_size).view(-1))
 
 
+import pickle
+
+path = '/home/UFAD/mdmahfuzalhasan/Documents/Projects/local-attention-model/data/ade20k/index_ade20k.pkl'
+file = open(path, 'rb')
+m = pickle.load(file)
+print(m.keys())
