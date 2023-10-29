@@ -98,42 +98,42 @@ def val_cityscape(epoch, val_loader, model):
             
             loss_1, out_1, attention_matrices = model(imgs_1, gts_1, visualize=True, attention=True)
             
-            for i, attn_matrix_per_head in enumerate(attention_matrices):
-                # print(i, len(attn_matrix_per_head))
-                if i != len(attention_matrices)-2:
-                    continue
-                num_heads = attn_heads[i]
-                print('nh: ',num_heads)
-                # B, N, C = attn_matrix.shape
-                # print('attn matrix: ',attn_matrix.shape)
-                # attn_matrix = attn_matrix.reshape(B, N, num_heads, C // num_heads).permute(0, 2, 1, 3)
-                # 256, 4, 4
-                for k, attn_matrix in enumerate(attn_matrix_per_head):
-                    print(f'head:{k} attn_m:{attn_matrix.shape}')
-                    attn_matrix, _ = torch.max(attn_matrix, dim=2)
-                    attn_matrix = attn_matrix.reshape(1024//(2**(i+2)), 1024//(2**(i+2)))
-                    print(f'head:{k} attn_m reshape:{attn_matrix.shape}')
-                    # exit()
-                    # print('attn matrix head: ',atn_h.shape)
-                    # atn_h = atn_h.reshape(1024//(2**(i+2)), 1024//(2**(i+2)), C//num_heads).permute(2,0,1)
-                    # print('atn_h before: ',atn_h.shape)
-                    factor = (4, 4)
-                    attn_matrix = attn_matrix.unsqueeze(0)
-                    attn_matrix = nn.functional.interpolate(attn_matrix.unsqueeze(
-                                0), scale_factor=16, mode="nearest")[0]
-                    print(f'head:{k} attn_m interpolate:{attn_matrix.shape}')
+            # for i, attn_matrix_per_head in enumerate(attention_matrices):
+            #     # print(i, len(attn_matrix_per_head))
+            #     if i != len(attention_matrices)-2:
+            #         continue
+            #     num_heads = attn_heads[i]
+            #     print('nh: ',num_heads)
+            #     # B, N, C = attn_matrix.shape
+            #     # print('attn matrix: ',attn_matrix.shape)
+            #     # attn_matrix = attn_matrix.reshape(B, N, num_heads, C // num_heads).permute(0, 2, 1, 3)
+            #     # 256, 4, 4
+            #     for k, attn_matrix in enumerate(attn_matrix_per_head):
+            #         print(f'head:{k} attn_m:{attn_matrix.shape}')
+            #         attn_matrix, _ = torch.max(attn_matrix, dim=2)
+            #         attn_matrix = attn_matrix.reshape(1024//(2**(i+2)), 1024//(2**(i+2)))
+            #         print(f'head:{k} attn_m reshape:{attn_matrix.shape}')
+            #         # exit()
+            #         # print('attn matrix head: ',atn_h.shape)
+            #         # atn_h = atn_h.reshape(1024//(2**(i+2)), 1024//(2**(i+2)), C//num_heads).permute(2,0,1)
+            #         # print('atn_h before: ',atn_h.shape)
+            #         factor = (4, 4)
+            #         attn_matrix = attn_matrix.unsqueeze(0)
+            #         attn_matrix = nn.functional.interpolate(attn_matrix.unsqueeze(
+            #                     0), scale_factor=16, mode="nearest")[0]
+            #         print(f'head:{k} attn_m interpolate:{attn_matrix.shape}')
 
-                    attn_matrix = attn_matrix.permute(1, 2, 0) #  128,128,1
+            #         attn_matrix = attn_matrix.permute(1, 2, 0) #  128,128,1
 
-                    # atn_h = atn_h.permute(1, 2, 0)
+            #         # atn_h = atn_h.permute(1, 2, 0)
                     
-                    # print('atn_h after: ',atn_h.shape)
-                    stage = os.path.join(base_output_folder, f'attention_stage_{i}')
-                    if not os.path.exists(stage):
-                        os.makedirs(stage)
-                    plot_attention(attn_matrix, stage, k)
+            #         # print('atn_h after: ',atn_h.shape)
+            #         stage = os.path.join(base_output_folder, f'attention_stage_{i}')
+            #         if not os.path.exists(stage):
+            #             os.makedirs(stage)
+            #         plot_attention(attn_matrix, stage, k)
                     
-                exit()
+            #     exit()
                 
                 # # keep only the output patch attention
                 # attn_matrix = attn_matrix[0, :, 0, 1:].reshape(nh, -1)

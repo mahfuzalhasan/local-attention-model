@@ -54,7 +54,7 @@ def Main(parser, cfg, args):
 
         
         # <----------------- load model ----------------->
-        saved_model_path = os.path.join(config.checkpoint_dir, 'model_495_multiscalemultihead.pth')
+        saved_model_path = os.path.join('pretrained', 'model_495_multiscalemultihead.pth')
         print(saved_model_path)
         # exit()
         state_dict = torch.load(saved_model_path)

@@ -91,7 +91,6 @@ class MultiScaleAttention(nn.Module):
         k, v = kv[0], kv[1]
         
         # print(f' k:{k.shape} v:{v.shape} q:{q.shape}')
-        # print('############################################')
         self.attn_outcome_per_head = []
         attn_matrix_per_head = []
         for i in range(self.num_heads):
@@ -101,11 +100,11 @@ class MultiScaleAttention(nn.Module):
             kh = torch.unsqueeze(kh, dim=1)
             vh = v[:, i, :, :]
             vh = torch.unsqueeze(vh, dim=1)
-            print(f'#### \n head-wise k:{kh.shape} v:{vh.shape} q:{qh.shape}\n #### \n')
+            # print(f'#### \n head-wise k:{kh.shape} v:{vh.shape} q:{qh.shape}\n #### \n')
             rg_shp = self.local_region_shape[i]
             if rg_shp == 1:
                 a_1, attn_weight = self.attention(qh, kh, vh)
-                print(f'$$$$$$$$$$\n attn weight global : {attn_weight.shape} \n $$$$$$$$ \n' )
+                # print(f'$$$$$$$$$$\n attn weight global : {attn_weight.shape} \n $$$$$$$$ \n' )
              
             else:
                 q_patch = self.patchify(qh, H, W, rg_shp)
@@ -116,9 +115,9 @@ class MultiScaleAttention(nn.Module):
                 # Grouping head will be experimented later
                 B_, Nh, Np, Ch = q_patch.shape
                 q_p, k_p, v_p = map(lambda t: rearrange(t, 'b h n d -> (b h) n d', h = Nh), (q_patch, k_patch, v_patch))
-                print(f'for local q_p:{q_p.shape}')
+                # print(f'for local q_p:{q_p.shape}')
                 patched_attn, attn_weight = self.attention(q_p, k_p, v_p)
-                print(f'*********** \n attn weight local :{attn_weight.shape} \n *********** ')
+                # print(f'*********** \n attn weight local :{attn_weight.shape} \n *********** ')
                 patched_attn = patched_attn.view(B_, Nh, Np, Ch)
                 patched_attn = patched_attn.permute(0, 2, 1, 3).contiguous().reshape(B, N, Ch)
                 a_1 = patched_attn.unsqueeze(dim=1)

@@ -109,7 +109,6 @@ class EncoderDecoder(nn.Module):
         """Encode images with backbone and decode into a semantic segmentation
         map of the same size as input."""
         orisize = rgb.shape
-        
         if not attention:
             x = self.backbone(rgb, visualize)
         else:

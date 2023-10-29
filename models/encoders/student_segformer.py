@@ -33,7 +33,7 @@ from engine.logger import get_logger
 logger = get_logger()
 
 from visualizer.visualizer import *
-output_dir = '/home/UFAD/mdmahfuzalhasan/Documents/Projects/local-attention-model/check_output'
+output_dir = '/home/abjawad/Documents/GitHub/local-attention-model/check_output'
 
 
 
@@ -137,7 +137,11 @@ class Block(nn.Module):
 
         return x, attn_matrix_per_head
 
-
+# self.patch_embed1 = OverlapPatchEmbed(img_size=img_size, 
+#                                       patch_size=7, 
+#                                       stride=4, 
+#                                       in_chans=in_chans,
+#                                       embed_dim=embed_dims[0])
 class OverlapPatchEmbed(nn.Module):
     """ Image to Patch Embedding
     """
@@ -147,10 +151,11 @@ class OverlapPatchEmbed(nn.Module):
         img_size = to_2tuple(img_size)
         patch_size = to_2tuple(patch_size)
 
-        self.img_size = img_size
+        # self.img_size = img_size
         self.patch_size = patch_size
-        self.H, self.W = img_size[0] // patch_size[0], img_size[1] // patch_size[1]
-        self.num_patches = self.H * self.W
+        self.stride = stride
+        # self.H, self.W = img_size[0] // patch_size[0], img_size[1] // patch_size[1]
+        # self.num_patches = self.H * self.W
         self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=stride,
                               padding=(patch_size[0] // 2, patch_size[1] // 2))
         self.norm = nn.LayerNorm(embed_dim)
@@ -174,18 +179,31 @@ class OverlapPatchEmbed(nn.Module):
 
     def forward(self, x):
         # B C H W
-        print('x before proj: ',x.shape)
+        # print('patch size ', self.patch_size)
+        # print('stride ', self.stride)
+        # print('OverPatch input: ', x.shape)
         x = self.proj(x)
-        print('x after proj: ',x.shape)
+        # print('OverPatch proj: ', x.shape)
         _, _, H, W = x.shape
         x = x.flatten(2).transpose(1, 2)
-        print('x after flatten: ',x.shape)
+        # print('OverPatch flatten: ', x.shape)
         # B H*W/16 C
         x = self.norm(x)
 
         return x, H, W
 
-
+    # def __init__(self, fuse_cfg=None, **kwargs):
+    #     super(mit_b2, self).__init__(
+    #         patch_size=4, 
+    #         embed_dims=[64, 128, 320, 512], 
+    #         num_heads=[2, 4, 5, 8], 
+    #         mlp_ratios=[4, 4, 4, 4],
+    #         qkv_bias=True, 
+    #         norm_layer=partial(nn.LayerNorm, eps=1e-6), 
+    #         depths=[3, 4, 6, 3], 
+    #         sr_ratios=[8, 4, 2, 1],
+    #         drop_rate=0.0, 
+    #         drop_path_rate=0.1)
 # How to apply multihead multiscale
 class RGBXTransformer(nn.Module):
     def __init__(self, img_size=(480, 640), patch_size=16, in_chans=3, num_classes=1000, embed_dims=[64, 128, 256, 512], 
@@ -331,12 +349,12 @@ class RGBXTransformer(nn.Module):
         outs = []
         outs_fused = []
 
-        save_input_image(x_rgb, 'input', output_dir)
+        # save_input_image(x_rgb, 'input', output_dir)
 
         # stage 1
         x_rgb, H, W = self.patch_embed1(x_rgb)
 
-        print('############### Stage 1 ##########################')
+        # print('############### Stage 1 ##########################')
         print('tokenization: ',x_rgb.shape)
         if visualize:
             save_image_after_tokenization(x_rgb, H, W, 'patch_embed_1', output_dir)
@@ -350,18 +368,18 @@ class RGBXTransformer(nn.Module):
         x_rgb = self.norm1(x_rgb)
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         outs.append(x_rgb)
-        print('output: ',x_rgb.shape)
+        # print('output: ',x_rgb.shape)
 
         # save_after_block(x_rgb, 'Bstage1', output_dir)
 
-        print("******** End Stage 1 **************")
+        # print("******** End Stage 1 **************")
         
         
 
         # stage 2
-        print('############### Stage 2 ##########################')
+        # print('############### Stage 2 ##########################')
         x_rgb, H, W = self.patch_embed2(x_rgb)
-        print('tokenization: ',x_rgb.shape)
+        # print('tokenization: ',x_rgb.shape)
         if visualize:
             save_image_after_tokenization(x_rgb, H, W, 'patch_embed_2', output_dir)
 
@@ -376,17 +394,17 @@ class RGBXTransformer(nn.Module):
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         outs.append(x_rgb)
 
-        print('output: ',x_rgb.shape)
+        # print('output: ',x_rgb.shape)
 
         # save_after_block(x_rgb, 'Bstage2', output_dir)
 
-        print("******** End Stage 2 **************")
+        # print("******** End Stage 2 **************")
         
 
         # stage 3
         x_rgb, H, W = self.patch_embed3(x_rgb)
-        print('############### Stage 3 ##########################')
-        print('tokenization: ',x_rgb.shape)
+        # print('############### Stage 3 ##########################')
+        # print('tokenization: ',x_rgb.shape)
         if visualize:
             save_image_after_tokenization(x_rgb, H, W, 'patch_embed_3', output_dir)
             
@@ -400,17 +418,17 @@ class RGBXTransformer(nn.Module):
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         outs.append(x_rgb)
 
-        print('output: ',x_rgb.shape)
+        # print('output: ',x_rgb.shape)
 
         # save_after_block(x_rgb, 'Bstage3', output_dir)
 
-        print("******** End Stage 3 **************")
+        # print("******** End Stage 3 **************")
         
 
         # stage 4
         x_rgb, H, W = self.patch_embed4(x_rgb)
-        print('############### Stage 4 ##########################')
-        print('tokenization: ',x_rgb.shape)
+        # print('############### Stage 4 ##########################')
+        # print('tokenization: ',x_rgb.shape)
         if visualize:
             save_image_after_tokenization(x_rgb, H, W, 'patch_embed_4', output_dir)
 
@@ -423,18 +441,25 @@ class RGBXTransformer(nn.Module):
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         outs.append(x_rgb)
 
-        print('output: ',x_rgb.shape)
+        # print('output: ',x_rgb.shape)
 
         # save_after_block(x_rgb, 'Bstage4', output_dir)
 
-        print("******** End Stage 4 **************")
+        # print("******** End Stage 4 **************")
         if attention:
+            self.attention_matrices = attention_matrices
             return outs, attention_matrices
         else:
             return outs
 
-    def forward(self, x_rgb, visualize=False, attention=False):
-        out = self.forward_features(x_rgb, visualize, attention)
+    def get_attention_matrices(self):
+        return self.attention_matrices
+
+    def forward(self, x_rgb, visualize=True, attention=True):
+        
+        out, attention = self.forward_features(x_rgb, visualize, attention)
+        if attention:
+            return out, attention
         return out
 
 
