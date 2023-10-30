@@ -151,10 +151,10 @@ if __name__=="__main__":
     # #######print(backbone)
     B = 4
     C = 3
-    H = 32
-    W = 32
+    H = 480
+    W = 640
     device = 'cuda:0'
-    ms_attention = MultiScaleAttention(512, num_heads=2, sr_ratio=8, local_region_shape=[4, 8])
+    ms_attention = MultiScaleAttention(512, num_heads=8, sr_ratio=8, local_region_shape=[2, 2, 2, 2, 1, 1, 1, 1])
     ms_attention = ms_attention.to(device)
     # ms_attention = nn.DataParallel(ms_attention, device_ids = [0,1])
     # ms_attention.to(f'cuda:{ms_attention.device_ids[0]}', non_blocking=True)
