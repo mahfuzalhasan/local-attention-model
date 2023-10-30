@@ -53,6 +53,9 @@ C.image_width = 513
 # C.norm_mean = np.array([0.485, 0.456, 0.406]) for NyUdv2
 # C.norm_std = np.array([0.229, 0.224, 0.225])
 
+C.norm_mean = np.array([0.291,  0.329,  0.291]) # For CityScape
+C.norm_std = np.array([0.190,  0.190,  0.185])
+
 """ Settings for network, this would be different for each kind of model"""
 C.backbone = 'mit_b2' # Remember change the path below.
 C.pretrained_model = osp.join(C.root_dir, 'pretrained/mit_b2_imagenet.pth')
@@ -87,9 +90,9 @@ C.resume_model_path = osp.join(C.root_dir, 'Results/saved_models/07-10-23_2314/m
 """Eval Config"""
 C.eval_iter = 25
 C.eval_stride_rate = 2 / 3
-C.eval_scale_array = [1] # [0.75, 1, 1.25] # 
+C.eval_scale_array = [0.75, 1, 1.25] #[0.75, 1, 1.25] # 
 C.eval_flip = False # True # 
-C.eval_crop_size = [513, 513] # [height width]
+C.eval_crop_size = [1024, 1024] #[513, 513] --> for NYUDv2
 
 """Store Config"""
 C.checkpoint_start_epoch = 250

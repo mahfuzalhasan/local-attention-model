@@ -43,34 +43,12 @@ class MultiScaleAttention(nn.Module):
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
-        
-        # # Define a parameter table of relative position bias, shape: 2*Wh-1 * 2*Ww-1, nH
-        self.relative_position_bias_table = nn.Parameter(
-            torch.zeros((2 * dim - 1) * (2 * dim - 1), num_heads)
-        )
-        
-        # Get pair-wise relative position index for each token inside the window
-        self.register_buffer(
-            "relative_position_index",
-            get_relative_position_index(dim, dim).view(-1),
-        )
-        # Init relative positional bias
-        trunc_normal_(self.relative_position_bias_table, std=0.02)
 
         self.sr_ratio = sr_ratio
         if sr_ratio > 1:
             self.sr = nn.Conv2d(dim, dim, kernel_size=sr_ratio, stride=sr_ratio)
             self.norm = nn.LayerNorm(dim)
         self.apply(self._init_weights)
-
-    def _get_relative_positional_bias(self) -> torch.Tensor:
-        """Returns the relative positional bias.
-        Returns:
-            relative_position_bias (torch.Tensor): Relative positional bias.
-        """
-        relative_position_bias = self.relative_position_bias_table[self.relative_position_index].view(self.attn_area, self.attn_area, -1)
-        relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()
-        return relative_position_bias.unsqueeze(0)
     
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):

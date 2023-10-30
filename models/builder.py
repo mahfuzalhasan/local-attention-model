@@ -118,23 +118,17 @@ class EncoderDecoder(nn.Module):
             return out, aux_fm
         return out
 
-    def forward(self, rgb, label):
+    def forward(self, rgb, label=None):
         if self.aux_head:
             out, aux_fm = self.encode_decode(rgb)
         else:
             out = self.encode_decode(rgb)
-            # print(f'#############output: {out.size()}')
-            # print(out)
+            
+        if label is None:
+            return out
 
-        # print(f'output: {out.size()}')
-        # print('############# label ################## \n ')
-        # label = label.long()
-        # unique_values = torch.unique(label)
-        # print(unique_values)
-        # print('##########################################')
-        loss = self.criterion(out, label.long())
-        
-        # print(f'loss:{loss}')
-        if self.aux_head:
-            loss += self.aux_rate * self.criterion(aux_fm, label.long())
-        return loss, out
+        if label is not None:
+            loss = self.criterion(out, label.long())
+            if self.aux_head:
+                loss += self.aux_rate * self.criterion(aux_fm, label.long())
+            return loss, out

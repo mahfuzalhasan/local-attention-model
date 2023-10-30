@@ -46,6 +46,11 @@ class CityscapesDataset(data.Dataset):
 
         print("Found %d %s images" % (len(self.files[split]), split))
 
+        self.class_names =  ['road', 'sidewalk', 'building', 'wall', 'fence', 'pole',
+               'traffic light', 'traffic sign', 'vegetation', 'terrain', 'sky',
+               'person', 'rider', 'car', 'truck', 'bus', 'train', 'motorcycle',
+               'bicycle']
+
     def __len__(self):
         return len(self.files[self.split])
 

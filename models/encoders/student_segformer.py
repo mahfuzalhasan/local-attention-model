@@ -200,16 +200,6 @@ class RGBXTransformer(nn.Module):
                                               embed_dim=embed_dims[2])
         self.patch_embed4 = OverlapPatchEmbed(img_size=(img_size[0]// 16,img_size[1]//16), patch_size=3, stride=2, in_chans=embed_dims[2],
                                               embed_dim=embed_dims[3])
-
-        # self.extra_patch_embed1 = OverlapPatchEmbed(img_size=img_size, patch_size=7, stride=4, in_chans=in_chans,
-        #                                       embed_dim=embed_dims[0])
-        # self.extra_patch_embed2 = OverlapPatchEmbed(img_size=(img_size[0]// 4,img_size[1]//4), patch_size=3, stride=2, in_chans=embed_dims[0],
-        #                                       embed_dim=embed_dims[1])
-        # self.extra_patch_embed3 = OverlapPatchEmbed(img_size=(img_size[0]// 8,img_size[1]//8), patch_size=3, stride=2, in_chans=embed_dims[1],
-        #                                       embed_dim=embed_dims[2])
-        # self.extra_patch_embed4 = OverlapPatchEmbed(img_size=(img_size[0]// 16,img_size[1]//16), patch_size=3, stride=2, in_chans=embed_dims[2],
-        #                                       embed_dim=embed_dims[3])
-
         # transformer encoder
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]  # stochastic depth decay rule
         cur = 0
@@ -221,12 +211,6 @@ class RGBXTransformer(nn.Module):
             for i in range(depths[0])])
         self.norm1 = norm_layer(embed_dims[0])
 
-        # self.extra_block1 = nn.ModuleList([Block(
-        #     dim=embed_dims[0], num_heads=num_heads[0], mlp_ratio=mlp_ratios[0], qkv_bias=qkv_bias, qk_scale=qk_scale,
-        #     drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
-        #     sr_ratio=sr_ratios[0])
-        #     for i in range(depths[0])])
-        # self.extra_norm1 = norm_layer(embed_dims[0])
         cur += depths[0]
 
         self.block2 = nn.ModuleList([Block(
@@ -236,62 +220,27 @@ class RGBXTransformer(nn.Module):
             for i in range(depths[1])])
         self.norm2 = norm_layer(embed_dims[1])
 
-        # self.extra_block2 = nn.ModuleList([Block(
-        #     dim=embed_dims[1], num_heads=num_heads[1], mlp_ratio=mlp_ratios[1], qkv_bias=qkv_bias, qk_scale=qk_scale,
-        #     drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur+1], norm_layer=norm_layer,
-        #     sr_ratio=sr_ratios[1])
-        #     for i in range(depths[1])])
-        # self.extra_norm2 = norm_layer(embed_dims[1])
-
         cur += depths[1]
 
         self.block3 = nn.ModuleList([Block(
             dim=embed_dims[2], num_heads=num_heads[2], mlp_ratio=mlp_ratios[2], qkv_bias=qkv_bias, qk_scale=qk_scale,
             drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
-            sr_ratio=sr_ratios[2], local_region_shape=[4, 4, 4, 2, 2])
+            sr_ratio=sr_ratios[2], local_region_shape=[4, 4, 2, 2, 1])
             for i in range(depths[2])])
         self.norm3 = norm_layer(embed_dims[2])
-
-        # self.extra_block3 = nn.ModuleList([Block(
-        #     dim=embed_dims[2], num_heads=num_heads[2], mlp_ratio=mlp_ratios[2], qkv_bias=qkv_bias, qk_scale=qk_scale,
-        #     drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
-        #     sr_ratio=sr_ratios[2])
-        #     for i in range(depths[2])])
-        # self.extra_norm3 = norm_layer(embed_dims[2])
 
         cur += depths[2]
 
         self.block4 = nn.ModuleList([Block(
             dim=embed_dims[3], num_heads=num_heads[3], mlp_ratio=mlp_ratios[3], qkv_bias=qkv_bias, qk_scale=qk_scale,
             drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
-            sr_ratio=sr_ratios[3], local_region_shape=[4, 4, 2, 2, 2, 2, 2, 2])
+            sr_ratio=sr_ratios[3], local_region_shape=[2, 2, 2, 2, 1, 1, 1, 1])
             for i in range(depths[3])])
         self.norm4 = norm_layer(embed_dims[3])
 
-        # self.extra_block4 = nn.ModuleList([Block(
-        #     dim=embed_dims[3], num_heads=num_heads[3], mlp_ratio=mlp_ratios[3], qkv_bias=qkv_bias, qk_scale=qk_scale,
-        #     drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
-        #     sr_ratio=sr_ratios[3])
-        #     for i in range(depths[3])])
-        # self.extra_norm4 = norm_layer(embed_dims[3])
-
         cur += depths[3]
 
-        # self.FRMs = nn.ModuleList([
-        #             FRM(dim=embed_dims[0], reduction=1),
-        #             FRM(dim=embed_dims[1], reduction=1),
-        #             FRM(dim=embed_dims[2], reduction=1),
-        #             FRM(dim=embed_dims[3], reduction=1)])
-
-        # self.FFMs = nn.ModuleList([
-        #             FFM(dim=embed_dims[0], reduction=1, num_heads=num_heads[0], norm_layer=norm_fuse),
-        #             FFM(dim=embed_dims[1], reduction=1, num_heads=num_heads[1], norm_layer=norm_fuse),
-        #             FFM(dim=embed_dims[2], reduction=1, num_heads=num_heads[2], norm_layer=norm_fuse),
-        #             FFM(dim=embed_dims[3], reduction=1, num_heads=num_heads[3], norm_layer=norm_fuse)])
-
         self.apply(self._init_weights)
-
-        # self.head = DecoderHead(in_channels=self.channels, num_classes=self.num_classes, norm_layer=norm_layer, embed_dim=self.decoder_embed_dim)
 
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
