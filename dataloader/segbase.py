@@ -75,6 +75,7 @@ class SegmentationDataset(object):
             img = img.filter(ImageFilter.GaussianBlur(radius=random.random()))
         # final transform
         img, mask = self._img_transform(img), self._mask_transform(mask)
+        
         return img, mask
 
     def _img_transform(self, img):
