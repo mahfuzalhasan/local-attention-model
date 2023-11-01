@@ -27,12 +27,14 @@ def get_relative_position_index(win_h: int, win_w: int) -> torch.Tensor:
 # ms_attention = MultiScaleAttention(512, num_heads=8, sr_ratio=8, local_region_shape=[2, 2, 2, 2, 1, 1, 1, 1])
 
 class MultiScaleAttention(nn.Module):
-    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0., sr_ratio=1, local_region_shape = [4, 8, 40]):
+    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., 
+                    proj_drop=0., sr_ratio=1, local_region_shape = [4, 8, 40], img_size=(32,32)):
         super().__init__()
         assert dim % num_heads == 0, f"dim {dim} should be divided by num_heads {num_heads}."
 
         self.dim = dim
         self.num_heads = num_heads
+        self.img_size = img_size
         head_dim = dim // num_heads
         self.scale = qk_scale or head_dim ** -0.5
         self.local_region_shape = local_region_shape
@@ -44,11 +46,69 @@ class MultiScaleAttention(nn.Module):
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
 
+        unique_vals = sorted(list(set(self.local_region_shape)))
+        if unique_vals.count(1)>0:
+            unique_vals.remove(1)
+
+        corr_projections = []
+        
+        for i in range(len(unique_vals)-1):
+            
+            small_patch = unique_vals[i]    # 4
+            large_patch = unique_vals[i+1] # 8
+
+            #print(small_patch, large_patch)
+
+            in_channel, out_channel = self.proj_channel_conv(small_patch, large_patch)
+
+            c_p = nn.Conv2d(in_channel, out_channel, 1)
+
+            corr_projections.append(c_p)
+
+        self.corr_projections = nn.ModuleList(corr_projections)
+
+        #print('corr_proj convs: ',self.corr_projections)
+            
         self.sr_ratio = sr_ratio
         if sr_ratio > 1:
             self.sr = nn.Conv2d(dim, dim, kernel_size=sr_ratio, stride=sr_ratio)
             self.norm = nn.LayerNorm(dim)
         self.apply(self._init_weights)
+
+    def proj_channel_conv(self, small_patch, large_patch):
+        N = self.img_size[0] * self.img_size[1]   # (1024 = 32 x 32)
+
+        N_small_patch = N // (small_patch ** 2)     # 64
+        N_large_patch = N // (large_patch ** 2)     # 16
+
+        #print('Ns, Nl: ',N_small_patch, N_large_patch)
+        ratio = (large_patch ** 2) // (small_patch ** 2)    # 4
+
+        #print('ratio: ',ratio)
+
+        # sa = (B, 1, 64, 16 ,16)
+        # ba = (B, 1, 16, 64 ,64)
+
+        # sa --> ba : sa =  (B, 1, 64/(4**2), 64, 64) = (B, 1, 4, 64, 64)
+
+        # bsa = sa concat ba = B, 1, 20, 64, 64
+        #  bsa --> ba = 1x1conv(( 4 + 16), 16, 1)
+
+        reduced_patch = N_small_patch // (ratio**2)   
+
+        #print('red: ',reduced_patch)  
+        
+        in_channel = reduced_patch + N_large_patch
+        return in_channel, N_large_patch
+
+    def calc_index(self, patch_size):
+        unique_vals = sorted(list(set(self.local_region_shape)))
+        if unique_vals.count(1)>0:
+            unique_vals.remove(1)
+        index = unique_vals.index(patch_size)
+        return index
+
+
     
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
@@ -69,15 +129,21 @@ class MultiScaleAttention(nn.Module):
     """ arr.shape -> B x num_head x H x W x C """
     # create overlapping patches
     def patchify(self, arr, H, W, patch_size):
-        # print(arr.shape)
+        # #print(arr.shape)
         unwrap = arr.view(arr.shape[0], arr.shape[1], H, W, arr.shape[3])
         B, Nh, H, W, Ch = unwrap.shape
         patches = unwrap.view(B, Nh, H // patch_size, patch_size, W // patch_size, patch_size, Ch)
-        patches = patches.permute(0, 2, 4, 1, 3, 5, 6).contiguous().view(-1, Nh, patch_size**2, Ch)
+        patches = patches.permute(0, 1, 2, 4, 3, 5, 6).contiguous().view(B, Nh, -1, patch_size**2, Ch)
         return patches
 
 
-    def attention(self, q, k, v):
+    def attention(self, corr, v):
+        attn = corr.softmax(dim=-1)      #  couldn't figure out yet
+        attn = self.attn_drop(attn)
+        x = (attn @ v)
+        return x, attn
+
+    def attention_global(self, q, k, v):
         attn = (q @ k.transpose(-2, -1)) * self.scale   # scaling needs to be fixed
         attn = attn.softmax(dim=-1)      #  couldn't figure out yet
         attn = self.attn_drop(attn)
@@ -85,21 +151,31 @@ class MultiScaleAttention(nn.Module):
         return x
 
 
-    def fuse_ms_attn_map(self, A, H, W):
-        B, N, C = A[0].shape
-        output_small_patched_attn = A[1].permute(0, 2, 1).contiguous().view(B, C, H, W)
-        # output_small_patched_attn = self.attn_fusion[0](output_small_patched_attn, output_small_patched_attn)
-        global_attn = A[0].permute(0, 2, 1).contiguous().view(B, C, H, W)
-        ##print('shapes: ', output.shape, global_attn.shape)
-        for i in range(2,len(A)):
-            idx = i - 2
-            output_small_patched_attn = self.attn_fusion[idx](output_small_patched_attn, A[i].permute(0, 2, 1).contiguous().view(B, C, H, W))
-        output = self.global_fusion(output_small_patched_attn, global_attn)
-        # print('final fused: ',output.shape)
-        return output_small_patched_attn
+   
+
+    # correlation --> B, nh, N_patch, Np, Np
+    def merge_correlation_matrices(self, correlation, head_idx):
+
+        if self.local_region_shape[head_idx-1]==self.local_region_shape[head_idx]:
+            correlation += self.correlation_matrices[-1]
+        else:
+            
+            small_corr_matrix = self.correlation_matrices[-1]   #B,1,64,16,16
+            B, nh, N_patch_s, Np_s, Np_s = small_corr_matrix.shape
+            _, _, _, Np_l, Np_l = correlation.shape             #B,1,16,64,64
+            small_corr_matrix = small_corr_matrix.view(B, nh, -1, Np_l, Np_l) #B,1,4,64,64
+            correlation = torch.cat([correlation, small_corr_matrix],axis=2)#B,1,20,64,64
+            correlation = correlation.squeeze(dim=1)    #B,20,64,64
+            
+            index = self.calc_index(self.local_region_shape[head_idx-1])
+            correlation = self.corr_projections[index](correlation)#B,16,64,64
+            correlation = correlation.unsqueeze(dim=1)  #B,1,16,64,64
+        
+        return correlation
+
 
     def forward(self, x, H, W):
-        ####print('!!!!!!!!!!!!attention head: ',self.num_heads, ' !!!!!!!!!!')
+        #####print('!!!!!!!!!!!!attention head: ',self.num_heads, ' !!!!!!!!!!')
         A = []
         B, N, C = x.shape
         
@@ -110,6 +186,7 @@ class MultiScaleAttention(nn.Module):
         # print(f' k:{k.shape} v:{v.shape} q:{q.shape}')
         # print('############################################')
         self.attn_outcome_per_head = []
+        self.correlation_matrices = []
         for i in range(self.num_heads):
             qh = q[:, i, :, :]
             qh = torch.unsqueeze(qh, dim=1)
@@ -120,29 +197,38 @@ class MultiScaleAttention(nn.Module):
             # print(f' head-wise k:{kh.shape} v:{vh.shape} q:{qh.shape}')
             rg_shp = self.local_region_shape[i]
             if rg_shp == 1:
-                a_1 = self.attention(qh, kh, vh)
+                a_1 = self.attention_global(qh, kh, vh)
                 # print('global attn: ',a_1.shape)
             else:
+                # B, Nh, N_patch, Np, C
                 q_patch = self.patchify(qh, H, W, rg_shp)
                 k_patch = self.patchify(kh, H, W, rg_shp)
                 v_patch = self.patchify(vh, H, W, rg_shp)
 
-                # Here Nh = 1 as we are working on per head.
-                # Grouping head will be experimented later
-                B_, Nh, Np, Ch = q_patch.shape
-                q_p, k_p, v_p = map(lambda t: rearrange(t, 'b h n d -> (b h) n d', h = Nh), (q_patch, k_patch, v_patch))
-                patched_attn = self.attention(q_p, k_p, v_p)
-                patched_attn = patched_attn.view(B_, Nh, Np, Ch)
-                patched_attn = patched_attn.permute(0, 2, 1, 3).contiguous().reshape(B, N, Ch)
+                
+                B, Nh, N_Patch, Np, Ch = q_patch.shape
+                # q_p, k_p, v_p = map(lambda t: rearrange(t, 'b h n d -> (b h) n d', h = Nh), (q_patch, k_patch, v_patch))
+                
+                # B, Nh, N_patch, Np, Np    where Np = p^2, for whole image Np=N
+                correlation = (q_patch @ k_patch.transpose(-2, -1)) * self.scale
+                if len(self.correlation_matrices)>0:
+                    correlation = self.merge_correlation_matrices(correlation, i)
+                self.correlation_matrices.append(correlation)
+                
+                # (B, Nh, N_patch, Np, C), (B, Nh, N_patch, Np, Np)
+                patched_attn, attn_matrix = self.attention(correlation, v_patch)
+                #print(f'pa shape: {patched_attn.shape}')
+                # patched_attn = patched_attn.view(B, Nh, N_patch, Ch)
+                patched_attn = patched_attn.reshape(B, N, Ch)
                 a_1 = patched_attn.unsqueeze(dim=1)
-                # print('final attn: ',a_1.shape)
+                #print('final attn: ',a_1.shape)
             self.attn_outcome_per_head.append(a_1)
 
         #concatenating multi-scale outcome from different heads
         attn_fused = torch.cat(self.attn_outcome_per_head, axis=1)
-        # print('attn_fused:',attn_fused.shape)
+        #print('attn_fused:',attn_fused.shape)
         attn_fused = attn_fused.permute(0, 2, 1, 3).contiguous().reshape(B, N, C)
-        # print('fina attn_fused:',attn_fused.shape)
+        #print('fina attn_fused:',attn_fused.shape)
         attn_fused = self.proj(attn_fused)
         attn_fused = self.proj_drop(attn_fused )
         return attn_fused
@@ -153,13 +239,14 @@ if __name__=="__main__":
     C = 3
     H = 480
     W = 640
-    device = 'cuda:0'
-    ms_attention = MultiScaleAttention(512, num_heads=8, sr_ratio=8, local_region_shape=[2, 2, 2, 2, 1, 1, 1, 1])
+    device = 'cuda:1'
+    ms_attention = MultiScaleAttention(96, num_heads=4, sr_ratio=8, 
+                                local_region_shape=[1, 4, 8, 16, 16], img_size=(128,128))
     ms_attention = ms_attention.to(device)
     # ms_attention = nn.DataParallel(ms_attention, device_ids = [0,1])
     # ms_attention.to(f'cuda:{ms_attention.device_ids[0]}', non_blocking=True)
 
-    f = torch.randn(B, 1024, 512).to(device)
+    f = torch.randn(B, 16384, 96).to(device)
     ##print(f'input to multiScaleAttention:{f.shape}')
-    y = ms_attention(f, 32, 32)
+    y = ms_attention(f, 128, 128)
     ##print('output: ',y.shape)
