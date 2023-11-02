@@ -196,7 +196,23 @@
 
 import pickle
 
-path = '/home/UFAD/mdmahfuzalhasan/Documents/Projects/local-attention-model/data/ade20k/index_ade20k.pkl'
-file = open(path, 'rb')
-m = pickle.load(file)
-print(m.keys())
+# path = '/home/UFAD/mdmahfuzalhasan/Documents/Projects/local-attention-model/data/ade20k/index_ade20k.pkl'
+# file = open(path, 'rb')
+# m = pickle.load(file)
+# print(m.keys())
+
+
+A = [[1, 2, 3], [4, 5, 6]]
+B = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+
+# Convert the sublists to tuples to make them hashable
+A_set = set(map(tuple, A))
+B_set = set(map(tuple, B))
+
+# Perform a union operation on the sets
+union_set = A_set.intersection(B_set)
+
+# Convert the tuples back to lists
+result = [list(sublist) for sublist in union_set]
+
+print(result)
