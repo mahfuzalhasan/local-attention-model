@@ -57,17 +57,12 @@ class MultiScaleAttention(nn.Module):
             small_patch = unique_vals[i]    # 4
             large_patch = unique_vals[i+1] # 8
 
-            #print(small_patch, large_patch)
-
             in_channel, out_channel = self.proj_channel_conv(small_patch, large_patch)
-
             c_p = nn.Conv2d(in_channel, out_channel, 1)
-
             corr_projections.append(c_p)
 
         self.corr_projections = nn.ModuleList(corr_projections)
 
-        #print('corr_proj convs: ',self.corr_projections)
             
         self.sr_ratio = sr_ratio
         if sr_ratio > 1:
@@ -94,11 +89,10 @@ class MultiScaleAttention(nn.Module):
         # bsa = sa concat ba = B, 1, 20, 64, 64
         #  bsa --> ba = 1x1conv(( 4 + 16), 16, 1)
 
-        reduced_patch = N_small_patch // (ratio**2)   
-
-        #print('red: ',reduced_patch)  
+        reduced_patch = N_small_patch // (ratio**2)     #4
+        # in_channel = reduced_patch + N_large_patch
+        in_channel = reduced_patch
         
-        in_channel = reduced_patch + N_large_patch
         return in_channel, N_large_patch
 
     def calc_index(self, patch_size):
@@ -151,26 +145,22 @@ class MultiScaleAttention(nn.Module):
         return x
 
 
-   
-
     # correlation --> B, nh, N_patch, Np, Np
     def merge_correlation_matrices(self, correlation, head_idx):
 
         if self.local_region_shape[head_idx-1]==self.local_region_shape[head_idx]:
             correlation += self.correlation_matrices[-1]
         else:
-            
             small_corr_matrix = self.correlation_matrices[-1]   #B,1,64,16,16
             B, nh, N_patch_s, Np_s, Np_s = small_corr_matrix.shape
             _, _, _, Np_l, Np_l = correlation.shape             #B,1,16,64,64
             small_corr_matrix = small_corr_matrix.view(B, nh, -1, Np_l, Np_l) #B,1,4,64,64
-            correlation = torch.cat([correlation, small_corr_matrix],axis=2)#B,1,20,64,64
-            correlation = correlation.squeeze(dim=1)    #B,20,64,64
             
             index = self.calc_index(self.local_region_shape[head_idx-1])
-            correlation = self.corr_projections[index](correlation)#B,16,64,64
-            correlation = correlation.unsqueeze(dim=1)  #B,1,16,64,64
-        
+            extended_small_corr = self.corr_projections[index](small_corr_matrix.squeeze(dim=1))#B,16,64,64
+            extended_small_corr = extended_small_corr.unsqueeze(dim=1)  #B,1,16,64,64
+            correlation += extended_small_corr                          #B,1,16,64,64
+
         return correlation
 
 
