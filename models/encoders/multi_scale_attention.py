@@ -68,55 +68,12 @@ class MultiScaleAttention(nn.Module):
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
-        
-        # Define a parameter table of relative position bias, shape: 2*Wh-1 * 2*Ww-1, nH
-        # Each element of this table
-        # is a parameter list
-        # where for ith index it learns between which pair of pixels the distance will be i
-        self.table_list = nn.ParameterList([nn.Parameter(torch.zeros((2 * window_size - 1) * (2 * window_size - 1), 1))
-                                            for window_size in local_region_shape])
-
-        # Get pair-wise relative position index for each token inside the window
-        
-        # We need to pass the relative distance from index field
-
-        # self.register_buffer("index_list", get_rpe_per_head(self.local_region_shape))
-        # for index in self.index_list:
-        #     #print(index.size())
-        # #print()
-        # Get pair-wise relative position index for each token inside the window
-        # self.index_list = []
-        # for i in range(self.num_heads):
-        #     window_size = self.local_region_shape[i]
-        #     relative_position_index = get_relative_position_index(window_size, window_size).view(-1)
-        #     self.index_list.append(relative_position_index)
-        self.index_list = nn.ParameterList([nn.Parameter(get_relative_position_index(
-                                window_size, window_size).view(-1), requires_grad=False)
-                                    for window_size in local_region_shape
-                                    ])
 
         self.sr_ratio = sr_ratio
         if sr_ratio > 1:
             self.sr = nn.Conv2d(dim, dim, kernel_size=sr_ratio, stride=sr_ratio)
             self.norm = nn.LayerNorm(dim)
         self.apply(self._init_weights)
-
-    def _get_relative_positional_bias(self, idx_h, attn_size) -> torch.Tensor:
-        """Returns the relative positional bias.
-        Returns:
-            relative_position_bias (torch.Tensor): Relative positional bias.
-        """
-        attn_area = attn_size * attn_size
-        relative_position_bias_table = self.table_list[idx_h]
-        #print('table: ',relative_position_bias_table.shape)
-        relative_position_index = self.index_list[idx_h]    # B, 256/ B,16
-        #print('rpi: ',relative_position_index.shape, torch.max(relative_position_index))
-
-        relative_position_bias = relative_position_bias_table[relative_position_index].view(attn_area, attn_area, -1)
-        #print('relative_positional_bias: ',relative_position_bias.shape)
-        relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()
-
-        return relative_position_bias.unsqueeze(0)
     
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
@@ -229,16 +186,16 @@ class MultiScaleAttention(nn.Module):
 if __name__=="__main__":
     # ########print(backbone)
     B = 4
-    C = 128
+    C = 3
     H = 32
     W = 32
-    # device = 'cuda:0'
-    ms_attention = MultiScaleAttention(C, num_heads=4, sr_ratio=8, local_region_shape=[2, 2, 4, 4])
-    # ms_attention = ms_attention.to(device)
-    ms_attention = nn.DataParallel(ms_attention, device_ids = [0,1,2,3])
-    ms_attention.to(f'cuda:{ms_attention.device_ids[0]}', non_blocking=True)
+    device = 'cuda:0'
+    ms_attention = MultiScaleAttention(512, num_heads=2, sr_ratio=8, local_region_shape=[4, 8])
+    ms_attention = ms_attention.to(device)
+    # ms_attention = nn.DataParallel(ms_attention, device_ids = [0,1])
+    # ms_attention.to(f'cuda:{ms_attention.device_ids[0]}', non_blocking=True)
 
-    f = torch.randn(B, H*W, C).to(ms_attention.device_ids[0])
-    #print(f'input to multiScaleAttention:{f.shape}')
-    y = ms_attention(f, H, W)
-    #print('output: ',y.shape)
+    f = torch.randn(B, 1024, 512).to(device)
+    ##print(f'input to multiScaleAttention:{f.shape}')
+    y = ms_attention(f, 32, 32)
+    ##print('output: ',y.shape)

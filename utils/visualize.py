@@ -2,6 +2,23 @@ import numpy as np
 import cv2
 import scipy.io as sio
 
+def unnormalize_img_numpy(imgs, idx, path):
+    """ # imgs: Torch: B, C, H, W
+    # idx --> batch iindex
+    #path --> save path """
+
+    for i in range(imgs.shape[0]):
+        n_img = imgs[i].permute(1, 2, 0).detach().cpu().numpy()
+        # print('numpy image shape: ',n_img.shape)
+        for i in range(3):
+            n_img[:, :, i] *= data_std[i]
+            n_img[:,:,i] += data_mean[i] 
+        n_img *= 255.0
+        n_img = np.array(n_img, dtype=np.uint8)
+        # print(n_img.shape)
+        cv2.imwrite(os.path.join(path, f'batch_{idx}_img_{i}.jpg'),n_img)
+
+
 def set_img_color(colors, background, img, pred, gt, show255=False):
     for i in range(0, len(colors)):
         if i != background:

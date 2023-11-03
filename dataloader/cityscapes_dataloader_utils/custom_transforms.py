@@ -314,14 +314,6 @@ class PhotoMetricDistortion(object):
         return results
 
 
-
-
-
-
-
-
-
-
 class Normalize(object):
     """Normalize a tensor image with mean and standard deviation.
     Args:
@@ -466,6 +458,40 @@ class RandomScaleCrop(object):
         # random scale (short edge)
         short_size = random.randint(int(self.base_size * 0.5), int(self.base_size * 2.0))
         
+        w, h = img.size
+
+        if h > w:
+            ow = short_size
+            oh = int(1.0 * h * ow / w)
+        else:
+            oh = short_size     
+            ow = int(1.0 * w * oh / h)  
+        mask = mask.resize((ow, oh), Image.NEAREST) 
+        # pad crop
+        if short_size < self.crop_size:
+            padh = self.crop_size - oh if oh < self.crop_size else 0
+            padw = self.crop_size - ow if ow < self.crop_size else 0
+            mask = ImageOps.expand(mask, border=(0, 0, padw, padh), fill=self.fill)
+        # random crop crop_size
+        w_resize, h_resize = mask.size      
+        x1 = random.randint(0, w_resize - self.crop_size) 
+        y1 = random.randint(0, h_resize - self.crop_size)   
+
+class RandomScaleCrop(object):
+    def __init__(self, base_size, crop_size, fill=0):
+        self.base_size = base_size
+        self.crop_size = crop_size
+        self.fill = fill
+
+    def __call__(self, sample):
+        img = sample['image']
+        mask = sample['label']
+        depth = sample['depth']
+
+        # random scale (short edge)
+        short_size = random.randint(int(self.base_size * 0.5), int(self.base_size * 2.0))
+        #[256, 1024] with base size 512
+        #[512, 2048] with base size 1024
         w, h = img.size
 
         if h > w:

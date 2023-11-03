@@ -15,10 +15,8 @@ import torch.backends.cudnn as cudnn
 from torch.nn.parallel import DistributedDataParallel, DataParallel
 
 ## Dataset-specific imports
-# from config import config
+
 from config_cityscapes import config
-# from dataloader.dataloader import get_train_loader
-from dataloader.cityscapes_dataloader import get_train_loader
 from models.builder import EncoderDecoder as segmodel
 from dataloader.ade import ADE20KSegmentation
 # from dataloader.RGBXDataset import RGBXDataset

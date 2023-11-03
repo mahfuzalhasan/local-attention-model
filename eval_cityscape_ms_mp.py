@@ -4,18 +4,32 @@ import argparse
 import numpy as np
 import scipy.io as sio
 
+import os.path as osp
+import sys
+import time
+import argparse
+from tqdm import tqdm
+from datetime import datetime
+import numpy as np
+
 import torch
 import torch.nn as nn
+from  torch.utils.data import DataLoader
+import torch.distributed as dist
+import torch.backends.cudnn as cudnn
+from torch.nn.parallel import DistributedDataParallel, DataParallel
 
-from config import config
+from config_cityscapes import config
 from utils.pyt_utils import ensure_dir, link_file, load_model, parse_devices
 from utils.visualize import print_iou, show_img
 from engine.evaluator import Evaluator
 from engine.logger import get_logger
 from utils.metric import hist_info, compute_score
-from dataloader.RGBXDataset import RGBXDataset
+
 from models.builder import EncoderDecoder as segmodel
-from dataloader.nyudv2_dataloader import ValPre
+
+from dataloader.cfg_defaults import get_cfg_defaults
+from dataloader.cityscapes_dataloader import CityscapesDataset
 
 import torch.multiprocessing
 torch.multiprocessing.set_sharing_strategy('file_system')
@@ -24,14 +38,25 @@ logger = get_logger()
 
 class SegEvaluator(Evaluator):
     def func_per_iteration(self, data, device):
-        img = data['data']      # H, W, C
+        img = data['image']      # H, W, C
         label = data['label']  
-        modal_x = data['modal_x']
-        name = data['fn']
-        pred = self.sliding_eval_rgbX(img, modal_x, config.eval_crop_size, config.eval_stride_rate, device)
+        # modal_x = data['modal_x']
+        name = data['id']
+        # print(f'Image Shape: ####  {img.shape} {type(img)}')
+
+        img = torch.permute(img, (1, 2, 0))
+        img = img.detach().cpu().numpy()
+        # img = img.numpy(force = True)
+        # label = torch.permute(label, (1, 2, 0))
+        label = label.detach().cpu().numpy()
+        # label = label.numpy(force = True)
+
+        pred = self.sliding_eval_rgbX(img, config.eval_crop_size, config.eval_stride_rate, device)
         hist_tmp, labeled_tmp, correct_tmp = hist_info(config.num_classes, pred, label)
         results_dict = {'hist': hist_tmp, 'labeled': labeled_tmp, 'correct': correct_tmp}
 
+
+        ###### output is saved here.
         if self.save_path is not None:
             ensure_dir(self.save_path)
             ensure_dir(self.save_path+'_color')
@@ -75,76 +100,56 @@ class SegEvaluator(Evaluator):
             count += 1
         
         iou, mean_IoU, _, freq_IoU, mean_pixel_acc, pixel_acc = compute_score(hist, correct, labeled)
-        
+        result_dict = dict(mean_iou=mean_IoU, freq_iou=freq_IoU, mean_pixel_acc=mean_pixel_acc)
+        print('result dict: ',result_dict)
         result_line = print_iou(iou, freq_IoU, mean_pixel_acc, pixel_acc,
                                 dataset.class_names, show_no_back=False)
-        return result_line
+        return result_line, result_dict
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-e', '--epochs', default='last', type=str)
-    parser.add_argument('-d', '--devices', default='0', type=str)
-    parser.add_argument('-v', '--verbose', default=False, action='store_true')
-    parser.add_argument('--show_image', '-s', default=False,
-                        action='store_true')
-    parser.add_argument('--save_path', '-p', default=None)
-
+    parser = argparse.ArgumentParser(description="Test cityscapes Loader")
+    parser.add_argument('config_file', help='config file path')
+    parser.add_argument("opts", help="Modify config options using the command-line", default=None, nargs=argparse.REMAINDER)
+    
     args = parser.parse_args()
-    all_devices = config.device_ids
+    print(args.opts)
+    cfg = get_cfg_defaults()
+    cfg.merge_from_file(args.config_file) # dataloader/cityscapes_rgbd_config.yaml
+    cfg.merge_from_list(args.opts)
+    cfg.freeze()
+    print(cfg)
 
+    logger = get_logger()
 
-    #data_dir = r'./data/nyudv2'
-    splits = sio.loadmat(os.path.join(config.dataset_path,'splits.mat'))
+    os.environ['MASTER_PORT'] = '169710'
+    
+    run_id = datetime.today().strftime('%m-%d-%y_%H%M')
+    print(f'$$$$$$$$$$$$$ run_id:{run_id} $$$$$$$$$$$$$')
+    args = parser.parse_args()
 
-    train = splits['trainNdxs']
-    test = splits['testNdxs']
-    trainIds = []
-    testIds = []
+    cudnn.benchmark = True
+    seed = config.seed
+    # if engine.distributed:
+    #     seed = engine.local_rank
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
 
-    for i in range(len(train)):
-        trainIds.append(int(train[i][0]))
-    for i in range(len(test)):
-        testIds.append(int(test[i][0]))
-
-    trainIds = [idx-1 for idx in trainIds]
-    testIds = [idx-1 for idx in testIds]
-
-    #print("train Ids: ",trainIds, len(trainIds))
-    #print('###############################')
-    #print("test Ids: ",testIds,len(testIds))
-
-    #exit()
+    dataset = CityscapesDataset(cfg, split='val')
     network = segmodel(cfg=config, criterion=None, norm_layer=nn.BatchNorm2d)
     # print("multigpu training")
     # network = nn.DataParallel(network, device_ids = [0])
     # network.to(f'cuda:{network.device_ids[0]}', non_blocking=True) #wrap weights inside module
 
-    ### why we are sending model to device beforehand.
-        # to load pre-trained weight because pre-trained weights are from cuda devices
+    all_devices = config.device_ids
 
-    data_setting = {'rgb_root': config.rgb_root_folder,
-                    'rgb_format': config.rgb_format,
-                    'gt_root': config.gt_root_folder,
-                    'gt_format': config.gt_format,
-                    'transform_gt': config.gt_transform,
-                    'x_root':config.x_root_folder,
-                    'x_format': config.x_format,
-                    'x_single_channel': config.x_is_single_channel,
-                    'class_names': config.class_names,
-                    'train_source': trainIds,
-                    'eval_source': testIds,
-                    'class_names': config.class_names}
-    val_pre = ValPre()
-    dataset = RGBXDataset(data_setting, 'val', val_pre)
- 
     with torch.no_grad():
         segmentor = SegEvaluator(dataset, config.num_classes, config.norm_mean,
                                  config.norm_std, network,
                                  config.eval_scale_array, config.eval_flip,
-                                 all_devices, args.verbose, args.save_path,
-                                 args.show_image)
-        saved_model_path = os.path.join(config.checkpoint_dir, "07-14-23_1803")
-        """ segmentor.run(config.checkpoint_dir, "NYUDV2_CMX+Segformer-B2.pth", config.val_log_file,
-                      config.link_val_log_file) """
-        segmentor.run(saved_model_path, "model_415.pth", config.val_log_file,
+                                 all_devices, verbose=False, save_path=None,
+                                 show_image = False)
+        # saved_model_path = os.path.join(config.checkpoint_dir, "07-14-23_1803")
+        saved_model_path = config.checkpoint_dir
+        segmentor.run(saved_model_path, "model_495_multiscalemultihead.pth", config.val_log_file,
                       config.link_val_log_file)

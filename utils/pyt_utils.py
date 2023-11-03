@@ -161,8 +161,8 @@ def load_model(model, model_file, is_restore=False):
     if isinstance(model_file, str):
         #device_cpu = torch.device('cpu')
         state_dict = torch.load(model_file)
-        print("keys in loaded model: ",state_dict.keys())
-        print("######################################")
+        # print("keys in loaded model: ",state_dict.keys())
+        # print("######################################")
         #exit()
         if 'model' in state_dict.keys():
             state_dict = state_dict['model']
@@ -179,7 +179,7 @@ def load_model(model, model_file, is_restore=False):
     ### Removing 'module' from weight keys to load into CPU first
     new_state_dict = {}
     for k, v in state_dict.items():
-        print("keys: ", k)
+        # print("keys: ", k)
         m_index = k.find('module.')
         if m_index >= 0:
             new_k = k[m_index+7:]
@@ -194,6 +194,7 @@ def load_model(model, model_file, is_restore=False):
 
     #if model is in CPU, its weights are not wrapped by 'module' key
     model.load_state_dict(new_state_dict, strict=True)
+    print("########## model successfully loaded #############")
     ckpt_keys = set(state_dict.keys())
     own_keys = set(model.state_dict().keys())
     missing_keys = own_keys - ckpt_keys
