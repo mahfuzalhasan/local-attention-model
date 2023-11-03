@@ -45,27 +45,6 @@ class ADE20KSegmentation(SegmentationDataset):
                     transforms.ToTensor(),      # PIL --> 0-1
                     transforms.Normalize((.485, .456, .406), (.229, .224, .225)),
                 ])
-        self.palette = self.get_palette()
-        self.palette_class_idx_list = self.map_palette_to_class_idx()
-        self.index_mapping = np.loadtxt('/home/UFAD/mdmahfuzalhasan/Documents/Projects/local-attention-model/data/ade20k/mapFromADE.txt')
-        
-    def convert(self, lab, index_mapping):
-        # Create an output array with the same shape as lab
-        lab_out = np.zeros_like(lab)
-        
-        # Iterate over the unique values in lab
-        unique_values = np.unique(lab)
-        print('unique_values', unique_values)
-        for unique_value in unique_values:
-            # Find the corresponding index in index_mapping
-            index = np.where(index_mapping[:, 0] == unique_value)
-            if len(index[0]) > 0:
-                index = index[0][0]
-                mapped_value = index_mapping[index, 1]
-                lab_out[lab == unique_value] = mapped_value
-        print('lab_out unique_values', np.unique(lab_out))
-        return lab_out
-
 
     def __getitem__(self, index):
         img = Image.open(self.images[index]).convert('RGB')
@@ -74,15 +53,9 @@ class ADE20KSegmentation(SegmentationDataset):
             if self.transform is not None:
                 img = self.transform(img)
             return img, os.path.basename(self.images[index])
-        
-        mask = cv2.imread(self.masks[index], cv2.IMREAD_GRAYSCALE)
-        mask = self.convert(mask, self.index_mapping)
-        print(f'initial mask:{mask.shape} unique:{np.unique(mask)}')
-        exit()
+         
         mask = Image.open(self.masks[index])
-        pixels = set(list(mask.getdata()))
-        print('unique in original mask: ',pixels)
-        
+       
         # synchrosized transform
         if self.mode == 'train':
             img, mask = self._sync_transform(img, mask)
@@ -91,16 +64,14 @@ class ADE20KSegmentation(SegmentationDataset):
         else:
             assert self.mode == 'testval'
             img, mask = self._img_transform(img), self._mask_transform(mask)
-        # general resize, normalize and to Tensor
-        # pixels = set(list(mask.getdata()))
-        print('img size: ',img.size, type(img))
-        print('mask size: ',mask.shape, type(mask))
-        # print('unique in original mask after crop: ',torch.unique(mask, dim=2))
+        
         if self.transform is not None:
             img = self.transform(img)
+            
         sample = {}
         sample['image'] = img
         sample['label'] = mask
+        # sample['id'] = os.path.basename(self.images[index])
         sample['id'] = os.path.basename(self.images[index])
         return sample
 
@@ -311,7 +282,7 @@ def _get_ade20k_pairs(folder, mode='train'):
                 if filename.endswith(".jpg"):
                     imgpath = os.path.join(scene_path, filename)
                     basename, _ = os.path.splitext(imgpath)
-                    maskpath = basename + '_seg.png'
+                    maskpath = basename + '_seg_converted.png'
 
                     if os.path.isfile(maskpath):
                         img_paths.append(imgpath)
