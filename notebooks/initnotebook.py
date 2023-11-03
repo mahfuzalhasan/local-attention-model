@@ -1,9 +1,3 @@
-
-
-
-
-
-
 import os, sys
 currentFolder = os.path.abspath('')
 try:
