@@ -15,4 +15,4 @@ check_output/*
 Config/*
 *.slurm
 slurm_logs*/
-notebooks/initnotebook.py
+# notebooks/initnotebook.py
