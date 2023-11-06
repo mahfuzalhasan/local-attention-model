@@ -1,13 +1,28 @@
+
+import os, sys
+
+# from models.builder import EncoderDecoder as segmodel
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_dir)
+parent_dir = os.path.abspath(os.path.join(current_dir, os.pardir)) 
+sys.path.append(parent_dir)
+
+model_dir = os.path.abspath(os.path.join(parent_dir, os.pardir))
+sys.path.append(model_dir)
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from utils.init_func import init_weight
-from utils.load_utils import load_pretrain
+# from utils.init_func import init_weight
+# from utils.load_utils import load_pretrain
 from functools import partial
 import numpy as np
 
 from engine.logger import get_logger
+
+from utils.init_func import init_weight
+from config_cityscapes import config
 
 logger = get_logger()
 
@@ -41,7 +56,7 @@ class EncoderDecoder(nn.Module):
         
         elif cfg.backbone == 'mit_b2':
             logger.info('Using backbone: Segformer-B2')
-            from .encoders.student_segformer import mit_b2 as backbone
+            from encoders.student_segformer import mit_b2 as backbone
             self.backbone = backbone(norm_fuse=norm_layer)
         
         elif cfg.backbone == 'mit_b1':
@@ -62,7 +77,7 @@ class EncoderDecoder(nn.Module):
 
         if cfg.decoder == 'MLPDecoder':
             logger.info('Using MLP Decoder')
-            from .decoders.MLPDecoder import DecoderHead
+            from decoders.MLPDecoder import DecoderHead
             self.decode_head = DecoderHead(in_channels=self.channels, num_classes=cfg.num_classes, norm_layer=norm_layer, embed_dim=cfg.decoder_embed_dim)
         
         elif cfg.decoder == 'UPernet':
@@ -94,6 +109,7 @@ class EncoderDecoder(nn.Module):
     
     def init_weights(self, cfg, pretrained=None):
         if pretrained:
+            pretrained = '/home/abjawad/Documents/GitHub/local-attention-model/pretrained/mit_b2.pth'
             logger.info('Loading pretrained model: {}'.format(pretrained))
             self.backbone.init_weights(pretrained=pretrained)
         logger.info('Initing weights ...')
@@ -138,3 +154,18 @@ class EncoderDecoder(nn.Module):
         if self.aux_head:
             loss += self.aux_rate * self.criterion(aux_fm, label.long())
         return loss, out
+
+
+
+
+if __name__ == "__main__":
+
+
+    criterion = nn.CrossEntropyLoss(reduction='mean', ignore_index=config.background)
+    model=EncoderDecoder(cfg=config, criterion=criterion, norm_layer=nn.BatchNorm2d)
+
+    input = torch.randn(1, 3, 512, 1024).cuda()
+
+    model.cuda()
+
+
