@@ -105,16 +105,6 @@ def Main(parser, cfg, args):
         print(f'lr_policy:{vars(lr_policy)}')
         # exit()
 
-    
-        starting_epoch = 1
-        if config.resume_train:
-            print('Loading model to resume train')
-            state_dict = torch.load(config.resume_model_path)
-            model.load_state_dict(state_dict['model'])
-            optimizer.load_state_dict(state_dict['optimizer'])
-            starting_epoch = state_dict['epoch']
-            print('resuming training with model: ', config.resume_model_path)
-
         if engine.distributed:
                 logger.info('.............distributed training.............')
                 
@@ -130,6 +120,15 @@ def Main(parser, cfg, args):
             model.to(f'cuda:{model.device_ids[0]}', non_blocking=True)
 
         logger.info('begin training:')
+
+        starting_epoch = 1
+        if config.resume_train:
+            print('Loading model to resume train')
+            state_dict = torch.load(config.resume_model_path)
+            model.load_state_dict(state_dict['model'])
+            optimizer.load_state_dict(state_dict['optimizer'])
+            starting_epoch = state_dict['epoch']
+            print('resuming training with model: ', config.resume_model_path)
         
         for epoch in range(starting_epoch, config.nepochs):
             model.train()
