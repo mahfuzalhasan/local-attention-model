@@ -164,7 +164,7 @@ class OverlapPatchEmbed(nn.Module):
     def forward(self, x):
         # B C H W
         x = self.proj(x)
-        # print('x after proj: ',x.shape)
+        # #print('x after proj: ',x.shape)
         _, _, H, W = x.shape
         x = x.flatten(2).transpose(1, 2)
         # B H*W/16 C
@@ -175,7 +175,7 @@ class OverlapPatchEmbed(nn.Module):
 
 # How to apply multihead multiscale
 class RGBXTransformer(nn.Module):
-    def __init__(self, img_size=(1024, 1024), patch_size=16, in_chans=3, num_classes=1000, embed_dims=[64, 128, 256, 512], 
+    def __init__(self, img_size=(512, 512), patch_size=16, in_chans=3, num_classes=1000, embed_dims=[64, 128, 256, 512], 
                  num_heads=[1, 2, 4, 8], mlp_ratios=[4, 4, 4, 4], qkv_bias=False, qk_scale=None, drop_rate=0.,
                  attn_drop_rate=0., drop_path_rate=0., norm_layer=nn.LayerNorm, norm_fuse=nn.BatchNorm2d,
                  depths=[3, 4, 6, 3], sr_ratios=[8, 4, 2, 1]):
@@ -259,7 +259,7 @@ class RGBXTransformer(nn.Module):
         """
         x_rgb: B x N x H x W
         """
-        # print('input: ',x_rgb.shape)
+        # #print('input: ',x_rgb.shape)
         B = x_rgb.shape[0]
         outs = []
         outs_fused = []
@@ -267,13 +267,14 @@ class RGBXTransformer(nn.Module):
         # stage 1
         x_rgb, H, W = self.patch_embed1(x_rgb)
 
-        # print('############### Stage 1 ##########################')
-        # print('tokenization: ',x_rgb.shape)
+        #print('############### Stage 1 ##########################')
+        #print('tokenization: ',x_rgb.shape)
 
         # exit()
         # B H*W/16 C
        
         for i, blk in enumerate(self.block1):
+            #print(f"\n ********** \n Block {i} \n *********** \n")
             x_rgb = blk(x_rgb, H, W)
         x_rgb = self.norm1(x_rgb)
         x_rgb = x_rgb.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
@@ -332,7 +333,7 @@ class RGBXTransformer(nn.Module):
         return outs
 
     def forward(self, x_rgb):
-        # print()
+        # #print()
         out = self.forward_features(x_rgb)
         return out
 
@@ -378,7 +379,7 @@ class mit_b1(RGBXTransformer):
 class mit_b2(RGBXTransformer):
     def __init__(self, fuse_cfg=None, **kwargs):
         super(mit_b2, self).__init__(
-            img_size=(1024, 1024), patch_size=4, embed_dims=[64, 128, 320, 512], 
+            img_size=(512, 512), patch_size=4, embed_dims=[64, 128, 320, 512], 
             num_heads=[2, 4, 5, 8], mlp_ratios=[4, 4, 4, 4], qkv_bias=True, 
             norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 4, 6, 3], 
             sr_ratios=[8, 4, 2, 1], drop_rate=0.0, drop_path_rate=0.1)
@@ -412,11 +413,11 @@ class mit_b5(RGBXTransformer):
 if __name__=="__main__":
     backbone = mit_b2(norm_layer = nn.BatchNorm2d)
     
-    # #######print(backbone)
+    # ########print(backbone)
     B = 4
     C = 3
-    H = 1024
-    W = 1024
+    H = 512
+    W = 512
     device = 'cuda:1'
     rgb = torch.randn(B, C, H, W)
     x = torch.randn(B, C, H, W)

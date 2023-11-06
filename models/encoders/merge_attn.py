@@ -38,6 +38,7 @@ class MultiScaleAttention(nn.Module):
         head_dim = dim // num_heads
         self.scale = qk_scale or head_dim ** -0.5
         self.local_region_shape = local_region_shape
+        #print(f'local region shape:{self.local_region_shape}')
         assert len(local_region_shape)==self.num_heads
         # Linear embedding
         self.q = nn.Linear(dim, dim, bias=qkv_bias)
@@ -57,9 +58,11 @@ class MultiScaleAttention(nn.Module):
             small_patch = unique_vals[i]    # 4
             large_patch = unique_vals[i+1] # 8
 
-            #print(small_patch, large_patch)
+            #print('small and large patch:',small_patch, large_patch)
 
             in_channel, out_channel = self.proj_channel_conv(small_patch, large_patch)
+
+            #print('in-out channel: ', in_channel, out_channel)
 
             c_p = nn.Conv2d(in_channel, out_channel, 1)
 
@@ -67,7 +70,7 @@ class MultiScaleAttention(nn.Module):
 
         self.corr_projections = nn.ModuleList(corr_projections)
 
-        #print('corr_proj convs: ',self.corr_projections)
+        ##print('corr_proj convs: ',self.corr_projections)
             
         self.sr_ratio = sr_ratio
         if sr_ratio > 1:
@@ -81,10 +84,10 @@ class MultiScaleAttention(nn.Module):
         N_small_patch = N // (small_patch ** 2)     # 64
         N_large_patch = N // (large_patch ** 2)     # 16
 
-        #print('Ns, Nl: ',N_small_patch, N_large_patch)
+        ##print('Ns, Nl: ',N_small_patch, N_large_patch)
         ratio = (large_patch ** 2) // (small_patch ** 2)    # 4
 
-        #print('ratio: ',ratio)
+        ##print('ratio: ',ratio)
 
         # sa = (B, 1, 64, 16 ,16)
         # ba = (B, 1, 16, 64 ,64)
@@ -96,7 +99,7 @@ class MultiScaleAttention(nn.Module):
 
         reduced_patch = N_small_patch // (ratio**2)   
 
-        #print('red: ',reduced_patch)  
+        ##print('red: ',reduced_patch)  
         
         in_channel = reduced_patch + N_large_patch
         return in_channel, N_large_patch
@@ -129,7 +132,7 @@ class MultiScaleAttention(nn.Module):
     """ arr.shape -> B x num_head x H x W x C """
     # create overlapping patches
     def patchify(self, arr, H, W, patch_size):
-        # #print(arr.shape)
+        # ##print(arr.shape)
         unwrap = arr.view(arr.shape[0], arr.shape[1], H, W, arr.shape[3])
         B, Nh, H, W, Ch = unwrap.shape
         patches = unwrap.view(B, Nh, H // patch_size, patch_size, W // patch_size, patch_size, Ch)
@@ -175,7 +178,7 @@ class MultiScaleAttention(nn.Module):
 
 
     def forward(self, x, H, W):
-        #####print('!!!!!!!!!!!!attention head: ',self.num_heads, ' !!!!!!!!!!')
+        ######print('!!!!!!!!!!!!attention head: ',self.num_heads, ' !!!!!!!!!!')
         A = []
         B, N, C = x.shape
         
@@ -183,22 +186,23 @@ class MultiScaleAttention(nn.Module):
         kv = self.kv(x).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         k, v = kv[0], kv[1]
         
-        # print(f' k:{k.shape} v:{v.shape} q:{q.shape}')
-        # print('############################################')
+        #print(f' k:{k.shape} v:{v.shape} q:{q.shape}')
+        # #print('############################################')
         self.attn_outcome_per_head = []
         self.correlation_matrices = []
         for i in range(self.num_heads):
+            #print(f'$$$$$$$$$ head:{i+1} $$$$$$$$$$$\n')
             qh = q[:, i, :, :]
             qh = torch.unsqueeze(qh, dim=1)
             kh = k[:, i, :, :]
             kh = torch.unsqueeze(kh, dim=1)
             vh = v[:, i, :, :]
             vh = torch.unsqueeze(vh, dim=1)
-            # print(f' head-wise k:{kh.shape} v:{vh.shape} q:{qh.shape}')
+            # #print(f' head-wise k:{kh.shape} v:{vh.shape} q:{qh.shape}')
             rg_shp = self.local_region_shape[i]
             if rg_shp == 1:
                 a_1 = self.attention_global(qh, kh, vh)
-                # print('global attn: ',a_1.shape)
+                # #print('global attn: ',a_1.shape)
             else:
                 # B, Nh, N_patch, Np, C
                 q_patch = self.patchify(qh, H, W, rg_shp)
@@ -217,7 +221,7 @@ class MultiScaleAttention(nn.Module):
                 
                 # (B, Nh, N_patch, Np, C), (B, Nh, N_patch, Np, Np)
                 patched_attn, attn_matrix = self.attention(correlation, v_patch)
-                #print(f'pa shape: {patched_attn.shape}')
+                #print(f'attn matrix: {attn_matrix.shape}')
                 # patched_attn = patched_attn.view(B, Nh, N_patch, Ch)
                 patched_attn = patched_attn.reshape(B, N, Ch)
                 a_1 = patched_attn.unsqueeze(dim=1)
@@ -226,7 +230,7 @@ class MultiScaleAttention(nn.Module):
 
         #concatenating multi-scale outcome from different heads
         attn_fused = torch.cat(self.attn_outcome_per_head, axis=1)
-        #print('attn_fused:',attn_fused.shape)
+        ##print('attn_fused:',attn_fused.shape)
         attn_fused = attn_fused.permute(0, 2, 1, 3).contiguous().reshape(B, N, C)
         #print('fina attn_fused:',attn_fused.shape)
         attn_fused = self.proj(attn_fused)
@@ -234,7 +238,7 @@ class MultiScaleAttention(nn.Module):
         return attn_fused
 
 if __name__=="__main__":
-    # #######print(backbone)
+    # ########print(backbone)
     B = 4
     C = 3
     H = 480
@@ -247,6 +251,6 @@ if __name__=="__main__":
     # ms_attention.to(f'cuda:{ms_attention.device_ids[0]}', non_blocking=True)
 
     f = torch.randn(B, 16384, 96).to(device)
-    ##print(f'input to multiScaleAttention:{f.shape}')
+    ###print(f'input to multiScaleAttention:{f.shape}')
     y = ms_attention(f, 128, 128)
-    ##print('output: ',y.shape)
+    ###print('output: ',y.shape)

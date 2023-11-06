@@ -14,22 +14,22 @@ _C.SYSTEM.NO_CUDA = False
 _C.SYSTEM.SEED = 1
 
 _C.TRAIN = CN()
-_C.TRAIN.BATCH_SIZE = 1
+_C.TRAIN.BATCH_SIZE = 16
 _C.TEST = CN()
 _C.TEST.BATCH_SIZE = 1
 
 _C.DATASET = CN()
 # ['pascal', 'coco', 'cityscapes', 'sunrgbd']
-_C.DATASET.NAME = 'cityscapes'
-_C.DATASET.N_CLASSES = 19
+_C.DATASET.NAME = 'ADE20k'
+_C.DATASET.N_CLASSES = 150
 # Root directory of dataset
-_C.DATASET.ROOT = 'datasets/Cityscapes/'
+_C.DATASET.ROOT = './data/ade20k/'
 # whether to use SBD dataset
 _C.DATASET.USE_STD = True
 # Base image size
-_C.DATASET.BASE_SIZE = 512
+_C.DATASET.BASE_SIZE = 520    #ADE20k
 # Crop image size
-_C.DATASET.CROP_SIZE = 1024
+_C.DATASET.CROP_SIZE = 512    #ADE20k
 # Use RGB-D input
 _C.DATASET.MODE = 'RGB' #['RGBD', 'RGB', 'RGB_HHA']
 _C.DATASET.SYNTHETIC = False

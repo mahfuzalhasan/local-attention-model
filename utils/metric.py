@@ -10,7 +10,7 @@ np.seterr(divide='ignore', invalid='ignore')
 
 def cal_mean_iou(pred, target):
     score = torch.exp(pred) # B, C, H, W
-    jaccard = JaccardIndex(task="multiclass", num_classes=score.shape[1], ignore_index = 255).to(score.get_device())    
+    jaccard = JaccardIndex(task="multiclass", num_classes=score.shape[1], ignore_index = -1).to(score.get_device())    
     
     mean_iou = jaccard(score, target)
     # print('mean iou: ',mean_iou)

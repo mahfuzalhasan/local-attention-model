@@ -37,31 +37,34 @@ C.x_is_single_channel = False # True for raw depth, thermal and aolp/dolp(not ao
 C.train_source = osp.join(C.dataset_path, "train.txt")
 C.eval_source = osp.join(C.dataset_path, "test.txt")
 C.is_test = False
-C.num_train_imgs = 2975
-C.num_eval_imgs = 654
-C.num_classes = 19  #for cityscape
+# C.num_train_imgs = 2975
+# C.num_eval_imgs = 654
+# C.num_classes = 19  #for cityscape
+C.num_classes = 150
+# C.num_train_imgs = 2975
+# C.num_eval_imgs = 654
 ##### for NYudV2
-C.class_names =  ['wall','floor','cabinet','bed','chair','sofa','table','door','window','bookshelf','picture','counter','blinds',
-    'desk','shelves','curtain','dresser','pillow','mirror','floor mat','clothes','ceiling','books','refridgerator',
-    'television','paper','towel','shower curtain','box','whiteboard','person','night stand','toilet',
-    'sink','lamp','bathtub','bag','otherstructure','otherfurniture','otherprop']
+
 #############
 """Image Config"""
-C.background = 255
-C.image_height = 513
-C.image_width = 513
+C.background = -1       #255 for cityscape
+C.image_height = 512
+C.image_width = 512
 # C.norm_mean = np.array([0.485, 0.456, 0.406]) for NyUdv2
 # C.norm_std = np.array([0.229, 0.224, 0.225])
 
-C.norm_mean = np.array([0.291,  0.329,  0.291]) # For CityScape
-C.norm_std = np.array([0.190,  0.190,  0.185])
+# C.norm_mean = np.array([0.291,  0.329,  0.291]) # For CityScape
+# C.norm_std = np.array([0.190,  0.190,  0.185])
+
+C.norm_mean = np.array([.485, .456, .406]) # For ADE20k
+C.norm_std = np.array([.229, .224, .225])
 
 """ Settings for network, this would be different for each kind of model"""
 C.backbone = 'mit_b2' # Remember change the path below.
 C.pretrained_model = osp.join(C.root_dir, 'pretrained/mit_b2_imagenet.pth')
 #C.pretrained_model = "../../Results/saved_models/NYUDV2_CMX+Segformer-B2.pth"
 C.decoder = 'MLPDecoder'
-C.decoder_embed_dim = 512
+C.decoder_embed_dim = 768   #512 for cityscape
 C.optimizer = 'AdamW'
 
 """Train Config"""
@@ -70,7 +73,8 @@ C.lr_power = 1
 C.momentum = 0.9
 C.weight_decay = 0.01
 C.batch_size = 8
-C.nepochs = 500
+C.nepochs = 101  #160k iteration. 1 epoch = 25574//16 = 1599 it. epoch = 160k//1599=101
+C.num_train_imgs = 25574
 C.niters_per_epoch = C.num_train_imgs // C.batch_size  + 1
 C.num_workers = 16
 C.train_scale_array = [0.5, 0.75, 1, 1.25, 1.5, 1.75]
@@ -79,8 +83,8 @@ C.warm_up_epoch = 4
 C.fix_bias = True
 C.bn_eps = 1e-3
 C.bn_momentum = 0.1
-C.train_print_stats = 50
-C.val_print_stats = 100
+C.train_print_stats = 400
+C.val_print_stats = 50
 #C.device_ids = [0] # for mahdi (lab-pc)
 # C.device_ids = [0, 1] # for mahdi (newton)
 C.device_ids = [0, 1, 2, 3] # for sakin
@@ -92,10 +96,10 @@ C.eval_iter = 25
 C.eval_stride_rate = 2 / 3
 C.eval_scale_array = [0.75, 1, 1.25] #[0.75, 1, 1.25] # 
 C.eval_flip = False # True # 
-C.eval_crop_size = [1024, 1024] #[513, 513] --> for NYUDv2
+C.eval_crop_size = [512, 512] #[513, 513] --> for NYUDv2
 
 """Store Config"""
-C.checkpoint_start_epoch = 250
+C.checkpoint_start_epoch = 50
 C.checkpoint_step = 5
 
 """Path Config"""

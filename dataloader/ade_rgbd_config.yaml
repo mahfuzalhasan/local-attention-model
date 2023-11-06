@@ -1,0 +1,5 @@
+DATASET:
+  NAME: 'ADE20K'
+  ROOT: 'data/ade20k/'
+  MODE: 'RGB' # RGBD, RGB, RGB_HHA
+  N_CLASSES: 150

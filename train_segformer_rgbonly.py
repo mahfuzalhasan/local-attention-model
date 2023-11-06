@@ -16,12 +16,12 @@ from torch.nn.parallel import DistributedDataParallel, DataParallel
 
 ## Dataset-specific imports
 
-from config_cityscapes import config
+from config_ade import config
 from models.builder import EncoderDecoder as segmodel
 from dataloader.ade import ADE20KSegmentation
 # from dataloader.RGBXDataset import RGBXDataset
-from dataloader.cityscapes_dataloader import CityscapesDataset
-from val_segformer_rgbonly import val_cityscape
+# from dataloader.cityscapes_dataloader import CityscapesDataset
+from val_segformer_rgbonly import val_ade
 
 from utils.init_func import init_weight, group_weight
 from utils.lr_policy import WarmUpPolyLR, PolyLR
@@ -54,29 +54,23 @@ def Main(parser, cfg, args):
         if torch.cuda.is_available():
             torch.cuda.manual_seed(seed)
 
-        # train_loader, train_sampler = get_train_loader(engine, CityscapesDataset) 
-        # print('train dataloader size: ',len(train_loader))
-
 
         ade_train = ADE20KSegmentation(split='train', mode='train')
-        train_loader = DataLoader(ade_train, batch_size=16, shuffle=True, num_workers=4, drop_last=True)
+        train_loader = DataLoader(ade_train, batch_size=config.batch_size, shuffle=True, num_workers=4, drop_last=True)
         print(f'total train: {len(ade_train)} t_iteration:{len(train_loader)}')
         ade_val = ADE20KSegmentation(split='val', mode='val')
         val_loader = DataLoader(ade_val, batch_size=1, shuffle=False, num_workers=4)
         print(f'total val: {len(ade_val)} v_iteration:{len(val_loader)}')
-        # exit()
-        # if (engine.distributed and (engine.local_rank == 0)) or (not engine.distributed):
-        #     tb_dir = config.tb_dir + '/{}'.format(time.strftime("%b%d_%d-%H-%M", time.localtime()))
-        #     generate_tb_dir = config.tb_dir + '/tb'
-        #     tb = SummaryWriter(log_dir=tb_dir)
-        #     engine.link_tb(tb_dir, generate_tb_dir)
+        
         save_log = os.path.join(config.log_dir, str(run_id))
         if not os.path.exists(save_log):
             os.makedirs(save_log)
         writer = SummaryWriter(save_log)
 
         # config network and criterion
-        criterion = nn.CrossEntropyLoss(reduction='mean', ignore_index=-1)
+        #ignore_index=-1 for ade20k, 255 for cityscape.
+        # depends on the fill value of cropped masks
+        criterion = nn.CrossEntropyLoss(reduction='mean', ignore_index=config.background)
 
         if engine.distributed:
             BatchNorm2d = nn.SyncBatchNorm
@@ -132,7 +126,7 @@ def Main(parser, cfg, args):
 
         logger.info('begin training:')
         
-        for epoch in range(starting_epoch, config.nepochs):
+        for epoch in range(starting_epoch, config.nepochs+1):
             model.train()
             optimizer.zero_grad()
             sum_loss = 0
@@ -143,6 +137,9 @@ def Main(parser, cfg, args):
                 gts = sample['label']
                 imgs = imgs.to(f'cuda:{model.device_ids[0]}', non_blocking=True)
                 gts = gts.to(f'cuda:{model.device_ids[0]}', non_blocking=True)  
+
+                # print(f'imgs:{imgs.size()} masks:{gts.size()}')
+                # exit()
 
                 loss, out = model(imgs, gts)
 
@@ -173,7 +170,7 @@ def Main(parser, cfg, args):
                 print_str = 'Epoch {}/{}'.format(epoch, config.nepochs) \
                         + ' Iter {}/{}:'.format(idx + 1, config.niters_per_epoch) \
                         + ' lr=%.4e' % lr \
-                        + ' miou=%.4e' %np.mean(np.asarray(m_iou_batches)) \
+                        + ' miou=%.4e' % np.mean(np.asarray(m_iou_batches)) \
                         + ' loss=%.4f total_loss=%.4f' % (loss, (sum_loss / (idx + 1)))+'\n'
 
                 del loss
@@ -183,19 +180,19 @@ def Main(parser, cfg, args):
 
             train_loss = sum_loss/len(train_loader)
             train_mean_iou = np.mean(np.asarray(m_iou_batches))
-            print(f"########## epoch:{epoch} train_loss:{train_loss} t_miou:{train_mean_iou}############")
+            print(f"########## epoch:{epoch} train_loss:{train_loss} miou:{train_mean_iou}############")
             writer.add_scalar('train_loss', train_loss, epoch)
             writer.add_scalar('train_m_iou', train_mean_iou, epoch)
 
             #save model every 10 epochs before checkpoint_start_epoch
-            if (epoch < config.checkpoint_start_epoch) and (epoch % (config.checkpoint_step*2) == 0):
+            if (epoch < config.checkpoint_start_epoch) and (epoch % (config.checkpoint_step) == 0):
                 save_model(model, optimizer, epoch, run_id, config.checkpoint_dir)
             #save model every 5 epochs after checkpoint_start_epoch
             elif (epoch >= config.checkpoint_start_epoch) and (epoch % config.checkpoint_step == 0) or (epoch == config.nepochs):
                 save_model(model, optimizer, epoch, run_id, config.checkpoint_dir)
             
             # compute val metrics
-            val_loss, val_mean_iou = val_cityscape(epoch, val_loader, model)            
+            val_loss, val_mean_iou = val_ade(epoch, val_loader, model)            
             writer.add_scalar('val_loss', val_loss, epoch)
             writer.add_scalar('val_mIOU', val_mean_iou, epoch)
             # print(f't_loss:{train_loss:.4f} v_loss:{val_loss:.4f} val_mIOU:{val_mean_iou:.4f}')
@@ -213,7 +210,7 @@ def save_model(model, optimizer, epoch, run_id, checkpoint_dir):
     torch.save(states, save_file_path)
     
 if __name__=='__main__':
-    parser = argparse.ArgumentParser(description="Test cityscapes Loader")
+    parser = argparse.ArgumentParser(description="ADE20k Loader")
     parser.add_argument('config_file', help='config file path')
     parser.add_argument("opts", help="Modify config options using the command-line", default=None, nargs=argparse.REMAINDER)
     #parser.add_argument('devices', default='0,1', type=str)

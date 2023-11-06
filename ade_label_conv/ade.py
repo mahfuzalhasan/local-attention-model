@@ -9,7 +9,7 @@ import cv2
 
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from dataloader.segbase import SegmentationDataset
+from segbase import SegmentationDataset
 
 import torchvision
 from torchvision import transforms
@@ -45,8 +45,27 @@ class ADE20KSegmentation(SegmentationDataset):
                     transforms.ToTensor(),      # PIL --> 0-1
                     transforms.Normalize((.485, .456, .406), (.229, .224, .225)),
                 ])
-        # self.images = self.images[:20]
-        # self.masks = self.masks[:20]
+        self.palette = self.get_palette()
+        self.palette_class_idx_list = self.map_palette_to_class_idx()
+        self.index_mapping = np.loadtxt('/home/UFAD/mdmahfuzalhasan/Documents/Projects/local-attention-model/data/ade20k/mapFromADE.txt')
+        
+    def convert(self, lab, index_mapping):
+        # Create an output array with the same shape as lab
+        lab_out = np.zeros_like(lab)
+        
+        # Iterate over the unique values in lab
+        unique_values = np.unique(lab)
+        print('unique_values', unique_values)
+        for unique_value in unique_values:
+            # Find the corresponding index in index_mapping
+            index = np.where(index_mapping[:, 0] == unique_value)
+            if len(index[0]) > 0:
+                index = index[0][0]
+                mapped_value = index_mapping[index, 1]
+                lab_out[lab == unique_value] = mapped_value
+        print('lab_out unique_values', np.unique(lab_out))
+        return lab_out
+
 
     def __getitem__(self, index):
         img = Image.open(self.images[index]).convert('RGB')
@@ -55,31 +74,112 @@ class ADE20KSegmentation(SegmentationDataset):
             if self.transform is not None:
                 img = self.transform(img)
             return img, os.path.basename(self.images[index])
-         
-        mask = Image.open(self.masks[index])
-       
-        # synchrosized transform
-        if self.mode == 'train':
-            img, mask = self._sync_transform(img, mask)
-        elif self.mode == 'val':
-            img, mask = self._val_sync_transform(img, mask)
-        else:
-            assert self.mode == 'testval'
-            img, mask = self._img_transform(img), self._mask_transform(mask)
         
-        if self.transform is not None:
-            img = self.transform(img)
-            
+        # mask = cv2.imread(self.masks[index],  cv2.IMREAD_GRAYSCALE)
+        mask = np.array(Image.open(self.masks[index]))
+        # mask = self.convert(mask, self.index_mapping)
+        # print(f'initial mask:{mask.shape} unique:{np.unique(mask)}')
+        # exit()
+        # mask = Image.open(self.masks[index])
+        # mask = np.array(mask)
+
+        # pixels = set(list(mask.getdata()))
+        # print('unique in original mask: ',pixels)
+        
+        # # synchrosized transform
+        # if self.mode == 'train':
+        #     img, mask = self._sync_transform(img, mask)
+        # elif self.mode == 'val':
+        #     img, mask = self._val_sync_transform(img, mask)
+        # else:
+        #     assert self.mode == 'testval'
+        #     img, mask = self._img_transform(img), self._mask_transform(mask)
+        # # general resize, normalize and to Tensor
+        # # pixels = set(list(mask.getdata()))
+        # print('img size: ',img.size, type(img))
+        # print('mask size: ',mask.shape, type(mask))
+        # # print('unique in original mask after crop: ',torch.unique(mask, dim=2))
+        # if self.transform is not None:
+        #     img = self.transform(img)
         sample = {}
         sample['image'] = img
         sample['label'] = mask
-        # sample['id'] = os.path.basename(self.images[index])
-        sample['id'] = os.path.basename(self.images[index])
+        sample['id'] = self.masks[index]
         return sample
+
+
+    def map_palette_to_class_idx(self):
+        '''
+        Returns a list of [1-decremented 3D palette, 1D class_idx] pairs.
+        Decrement of 1 implies incorporating the background. We ignore it as background in later processing.
+        '''
+        # class_idx = [i for i in range(1, 151)]
+        # assert len(palette) == len(class_idx)
+        palette_class_idx_list = [[[0, 0, 0], 0]]
+        
+        for i,p in enumerate(self.palette):
+            palette_class_idx_list.append([p, i+1])
+
+        # print(palette_class_idx_list, len(palette_class_idx_list))
+        return palette_class_idx_list
+
+
+    
+    # label_rgb --> PIL
+    def map_label_rgb_to_class_idx(self, label_rgb):
+        '''iterate label_rgb and map to class_idx'''
+        print('label pil: ',label_rgb.size, type(label_rgb))
+        pixels = set(list(label_rgb.getdata()))
+        print('unique values in final mask: ', pixels)
+        label_rgb = np.array(label_rgb, dtype=np.uint8)
+        print('rgb unique data numpy: ',np.unique(label_rgb))
+        class_idx = np.zeros(label_rgb.shape, dtype=np.uint8)  # Initialize with zeros
+        # print(class_idx.shape)
+        # exit()
+        self.palette.insert(0, [0, 0, 0])
+        self.palette = [tuple(i) for i in self.palette]
+        # self.palette = np.asarray(self.palette)
+        # print(self.palette.shape)
+        # exit()
+        # self.palette_class_idx_list = np.asarray(self.palette_class_idx_list, dtype=np.uint8)
+        # print(np.asarray(self.palette_class_idx_list).shape)
+        # exit()
+
+        for i, p in enumerate(self.palette):
+            print("pixel to check: ",p)
+            indices = np.where(label_rgb==p)
+            print('matched value: ',label_rgb[indices])
+            for index in indices:
+                
+                print('index: ',index)
+            exit()
+            # print('index: ',indices[0].shape)
+
+            class_idx[indices] = i            
+            # print(f'class:{i} sum:{torch.sum(color_mask)} shape:{color_mask.shape}')
+            # exit()
+            # # color_mask = torch.all(color_mask, dim=-1)  # [512, 512] # TODO: what is happening here ?? This is most likely the reason the code is not working
+            # class_idx[color_mask] = i
+        print(f'unique in mask final overall: {np.unique(class_idx)}')
+        print(f'unique in mask final in channel 0: {np.unique(class_idx[:, :, 0])}')
+        print(f'unique in mask final in channel 1: {np.unique(class_idx[:, :, 1])}')
+        print(f'unique in mask final in channel 2: {np.unique(class_idx[:, :, 2])}')
+        exit()
+        return class_idx
 
 
     # input mask --> PIL -->  512, 512, 3
     def _mask_transform(self, mask):
+        # print("it's coming home")
+        # pixels = set(list(mask.getdata()))
+        # print('unique in original mask after crop: ',pixels)
+        # palette = self.get_palette()
+        # palette.append([0, 0, 0])
+
+        # print(len(palette))
+
+        # self.map_label_rgb_to_class_idx(mask)
+        # exit()
         return torch.LongTensor(np.array(mask).astype('int32') - 1)
 
     def __len__(self):
@@ -214,7 +314,7 @@ def _get_ade20k_pairs(folder, mode='train'):
                 if filename.endswith(".jpg"):
                     imgpath = os.path.join(scene_path, filename)
                     basename, _ = os.path.splitext(imgpath)
-                    maskpath = basename + '_seg_converted.png'
+                    maskpath = basename + '_seg.png'
 
                     if os.path.isfile(maskpath):
                         img_paths.append(imgpath)

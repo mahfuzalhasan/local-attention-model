@@ -19,7 +19,7 @@ import torch.distributed as dist
 import torch.backends.cudnn as cudnn
 from torch.nn.parallel import DistributedDataParallel, DataParallel
 
-from config_cityscapes import config
+from config_ade import config
 from utils.pyt_utils import ensure_dir, link_file, load_model, parse_devices
 from utils.visualize import print_iou, show_img
 from engine.evaluator import Evaluator

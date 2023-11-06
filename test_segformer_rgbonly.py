@@ -16,7 +16,7 @@ from torch.nn.parallel import DistributedDataParallel, DataParallel
 
 ## Dataset-specific imports
 # from config import config
-from config_cityscapes import config
+from config_ade import config
 from eval import SegEvaluator
 # from dataloader.dataloader import get_train_loader
 

@@ -4,11 +4,15 @@ import torch
 import numpy as np
 
 from PIL import Image
-import matplotlib.pyplot as plt
+import cv2
+# import matplotlib.pyplot as plt
 
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dataloader.segbase import SegmentationDataset
+
+import torchvision
+from torchvision import transforms
 
 
 class ADE20KSegmentation(SegmentationDataset):
@@ -22,28 +26,14 @@ class ADE20KSegmentation(SegmentationDataset):
         'train', 'val' or 'test'
     transform : callable, optional
         A function that transforms the image
-    Examples
-    --------
-    >>> from torchvision import transforms
-    >>> import torch.utils.data as data
-    >>> # Transforms for Normalization
-    >>> input_transform = transforms.Compose([
-    >>>     transforms.ToTensor(),
-    >>>     transforms.Normalize((.485, .456, .406), (.229, .224, .225)),
-    >>> ])
-    >>> # Create Dataset
-    >>> trainset = ADE20KSegmentation(split='train', transform=input_transform)
-    >>> # Create Training Loader
-    >>> train_data = data.DataLoader(
-    >>>     trainset, 4, shuffle=True,
-    >>>     num_workers=4)
     """
     BASE_DIR = 'images'
     NUM_CLASS = 150
 
-    def __init__(self, root='../data/ade20k', split='train', mode=None, transform=None, **kwargs):
+    def __init__(self, root='./data/ade20k', split='train', mode=None, transform=None, **kwargs):
         super(ADE20KSegmentation, self).__init__(root, split, mode, transform, **kwargs)
         root = os.path.join(root, self.BASE_DIR)
+        print(root)
         assert os.path.exists(root), "{root} does not exist. Please fix the dataset path."
         self.images, self.masks = _get_ade20k_pairs(root, split) # TODO: fix annotation path for our setup . What does this return? ->
         assert (len(self.images) == len(self.masks))
@@ -52,7 +42,7 @@ class ADE20KSegmentation(SegmentationDataset):
         print('Found {} images in the folder {}'.format(len(self.images), root))
         if transform is None:
             self.transform = transforms.Compose([
-                    transforms.ToTensor(),
+                    transforms.ToTensor(),      # PIL --> 0-1
                     transforms.Normalize((.485, .456, .406), (.229, .224, .225)),
                 ])
 
@@ -63,7 +53,9 @@ class ADE20KSegmentation(SegmentationDataset):
             if self.transform is not None:
                 img = self.transform(img)
             return img, os.path.basename(self.images[index])
+         
         mask = Image.open(self.masks[index])
+       
         # synchrosized transform
         if self.mode == 'train':
             img, mask = self._sync_transform(img, mask)
@@ -72,11 +64,79 @@ class ADE20KSegmentation(SegmentationDataset):
         else:
             assert self.mode == 'testval'
             img, mask = self._img_transform(img), self._mask_transform(mask)
-        # general resize, normalize and to Tensor
+        
         if self.transform is not None:
             img = self.transform(img)
-        return img, mask, os.path.basename(self.images[index])
+            
+        sample = {}
+        sample['image'] = img
+        sample['label'] = mask
+        # sample['id'] = os.path.basename(self.images[index])
+        sample['id'] = os.path.basename(self.images[index])
+        return sample
 
+
+    def map_palette_to_class_idx(self):
+        '''
+        Returns a list of [1-decremented 3D palette, 1D class_idx] pairs.
+        Decrement of 1 implies incorporating the background. We ignore it as background in later processing.
+        '''
+        # class_idx = [i for i in range(1, 151)]
+        # assert len(palette) == len(class_idx)
+        palette_class_idx_list = [[[0, 0, 0], 0]]
+        
+        for i,p in enumerate(self.palette):
+            palette_class_idx_list.append([p, i+1])
+
+        print(palette_class_idx_list, len(palette_class_idx_list))
+        return palette_class_idx_list
+
+
+    
+    # label_rgb --> PIL
+    def map_label_rgb_to_class_idx(self, label_rgb):
+        '''iterate label_rgb and map to class_idx'''
+        print('label pil: ',label_rgb.size, type(label_rgb))
+        pixels = set(list(label_rgb.getdata()))
+        print('unique values in final mask: ', pixels)
+        label_rgb = np.array(label_rgb, dtype=np.uint8)
+        print('rgb unique data numpy: ',np.unique(label_rgb))
+        class_idx = np.zeros(label_rgb.shape, dtype=np.uint8)  # Initialize with zeros
+        # print(class_idx.shape)
+        # exit()
+        self.palette.insert(0, [0, 0, 0])
+        self.palette = [tuple(i) for i in self.palette]
+        # self.palette = np.asarray(self.palette)
+        # print(self.palette.shape)
+        # exit()
+        # self.palette_class_idx_list = np.asarray(self.palette_class_idx_list, dtype=np.uint8)
+        # print(np.asarray(self.palette_class_idx_list).shape)
+        # exit()
+
+        for i, p in enumerate(self.palette):
+            print("pixel to check: ",p)
+            indices = np.where(label_rgb==p)
+            print('matched value: ',label_rgb[indices])
+            for index in indices:
+                
+                print('index: ',index)
+            exit()
+            # print('index: ',indices[0].shape)
+
+            class_idx[indices] = i            
+            # print(f'class:{i} sum:{torch.sum(color_mask)} shape:{color_mask.shape}')
+            # exit()
+            # # color_mask = torch.all(color_mask, dim=-1)  # [512, 512] # TODO: what is happening here ?? This is most likely the reason the code is not working
+            # class_idx[color_mask] = i
+        print(f'unique in mask final overall: {np.unique(class_idx)}')
+        print(f'unique in mask final in channel 0: {np.unique(class_idx[:, :, 0])}')
+        print(f'unique in mask final in channel 1: {np.unique(class_idx[:, :, 1])}')
+        print(f'unique in mask final in channel 2: {np.unique(class_idx[:, :, 2])}')
+        exit()
+        return class_idx
+
+
+    # input mask --> PIL -->  512, 512, 3
     def _mask_transform(self, mask):
         return torch.LongTensor(np.array(mask).astype('int32') - 1)
 
@@ -152,10 +212,50 @@ class ADE20KSegmentation(SegmentationDataset):
                 "plate", "monitor, monitoring device", "bulletin board, notice board",
                 "shower", "radiator", "glass, drinking glass", "clock", "flag")
 
-
+    def get_palette(self):
+        PALETTE = [[120, 120, 120], [180, 120, 120], [6, 230, 230], [80, 50, 50],
+                [4, 200, 3], [120, 120, 80], [140, 140, 140], [204, 5, 255],
+                [230, 230, 230], [4, 250, 7], [224, 5, 255], [235, 255, 7],
+                [150, 5, 61], [120, 120, 70], [8, 255, 51], [255, 6, 82],
+                [143, 255, 140], [204, 255, 4], [255, 51, 7], [204, 70, 3],
+                [0, 102, 200], [61, 230, 250], [255, 6, 51], [11, 102, 255],
+                [255, 7, 71], [255, 9, 224], [9, 7, 230], [220, 220, 220],
+                [255, 9, 92], [112, 9, 255], [8, 255, 214], [7, 255, 224],
+                [255, 184, 6], [10, 255, 71], [255, 41, 10], [7, 255, 255],
+                [224, 255, 8], [102, 8, 255], [255, 61, 6], [255, 194, 7],
+                [255, 122, 8], [0, 255, 20], [255, 8, 41], [255, 5, 153],
+                [6, 51, 255], [235, 12, 255], [160, 150, 20], [0, 163, 255],
+                [140, 140, 140], [250, 10, 15], [20, 255, 0], [31, 255, 0],
+                [255, 31, 0], [255, 224, 0], [153, 255, 0], [0, 0, 255],
+                [255, 71, 0], [0, 235, 255], [0, 173, 255], [31, 0, 255],
+                [11, 200, 200], [255, 82, 0], [0, 255, 245], [0, 61, 255],
+                [0, 255, 112], [0, 255, 133], [255, 0, 0], [255, 163, 0],
+                [255, 102, 0], [194, 255, 0], [0, 143, 255], [51, 255, 0],
+                [0, 82, 255], [0, 255, 41], [0, 255, 173], [10, 0, 255],
+                [173, 255, 0], [0, 255, 153], [255, 92, 0], [255, 0, 255],
+                [255, 0, 245], [255, 0, 102], [255, 173, 0], [255, 0, 20],
+                [255, 184, 184], [0, 31, 255], [0, 255, 61], [0, 71, 255],
+                [255, 0, 204], [0, 255, 194], [0, 255, 82], [0, 10, 255],
+                [0, 112, 255], [51, 0, 255], [0, 194, 255], [0, 122, 255],
+                [0, 255, 163], [255, 153, 0], [0, 255, 10], [255, 112, 0],
+                [143, 255, 0], [82, 0, 255], [163, 255, 0], [255, 235, 0],
+                [8, 184, 170], [133, 0, 255], [0, 255, 92], [184, 0, 255],
+                [255, 0, 31], [0, 184, 255], [0, 214, 255], [255, 0, 112],
+                [92, 255, 0], [0, 224, 255], [112, 224, 255], [70, 184, 160],
+                [163, 0, 255], [153, 0, 255], [71, 255, 0], [255, 0, 163],
+                [255, 204, 0], [255, 0, 143], [0, 255, 235], [133, 255, 0],
+                [255, 0, 235], [245, 0, 255], [255, 0, 122], [255, 245, 0],
+                [10, 190, 212], [214, 255, 0], [0, 204, 255], [20, 0, 255],
+                [255, 255, 0], [0, 153, 255], [0, 41, 255], [0, 255, 204],
+                [41, 0, 255], [41, 255, 0], [173, 0, 255], [0, 245, 255],
+                [71, 0, 255], [122, 0, 255], [0, 255, 184], [0, 92, 255],
+                [184, 255, 0], [0, 133, 255], [255, 214, 0], [25, 194, 194],
+                [102, 255, 0], [92, 0, 255]]
+        return PALETTE
 def _get_ade20k_pairs(folder, mode='train'):
     img_paths = []
     mask_paths = []
+    print('folder: ',folder)
     if mode == 'train':
         root_dir = os.path.join(folder, 'training')
         assert os.path.exists(root_dir), "{root_dir} does not exist. Please fix train path."
@@ -166,20 +266,13 @@ def _get_ade20k_pairs(folder, mode='train'):
     for filename in os.listdir(root_dir):
         basename, _ = os.path.splitext(filename)
         file_path = os.path.join(root_dir, filename)
-        
-        '''
-        -- image path should be like this: ../data/ade20k/images/training/**/**/ADE_train_00000001.jpg
-        -- mask path should be like this: ../data/ade20k/images/training/**/**/ADE_train_00000001*seg.png
-        - file_path should be like this: ../data/ade20k/images/training/**/**/
-        '''
-        
         for scene in os.listdir(file_path):
             scene_path = os.path.join(file_path, scene)
             for filename in os.listdir(scene_path):
                 if filename.endswith(".jpg"):
                     imgpath = os.path.join(scene_path, filename)
                     basename, _ = os.path.splitext(imgpath)
-                    maskpath = basename + '_seg.png'
+                    maskpath = basename + '_seg_converted.png'
 
                     if os.path.isfile(maskpath):
                         img_paths.append(imgpath)
@@ -199,17 +292,42 @@ def _get_ade20k_pairs(folder, mode='train'):
 
 if __name__ == '__main__':
     # train_dataset = ADE20KSegmentation()
-    train_dataset = ADE20KSegmentation(split='val')
+    root = "/home/UFAD/mdmahfuzalhasan/Documents/Projects/local-attention-model/data/ade20k"
+    train_dataset = ADE20KSegmentation(root=root, split='train', mode='train')
 
-    img, mask, path = train_dataset.__getitem__(1)
+    classes = train_dataset.classes
+
+    print(len(classes))
+
+
+    sample = train_dataset.__getitem__(1)
+    img, mask, path = sample['image'], sample['label'], sample['id']
     print(f'img: {img.shape}')
     print(f'mask: {mask.shape}')
+    print('unique values: ',torch.unique(mask), mask.size())
+
+    mask = mask.detach().cpu().numpy()
+    print('unique numpy: ',np.unique(mask))
+    cv2.imwrite('mask.jpg', mask)
+
+    
+
+    
+
+    # img = img.detach().cpu().numpy()
+    # print('unique numpy img: ',np.unique(img))
+    # cv2.imwrite('img.jpg', img)
+
     print(f'path: {path}')
 
-    fig, (ax1, ax2) = plt.subplots(1, 2)
-    ax1.imshow(img)
-    ax1.set_title('Image')
-    ax2.imshow(mask)
-    ax2.set_title('Mask')
-    plt.show()
+
+
+    
+
+    # fig, (ax1, ax2) = plt.subplots(1, 2)
+    # ax1.imshow(img)
+    # ax1.set_title('Image')
+    # ax2.imshow(mask)
+    # ax2.set_title('Mask')
+    # plt.show()
     
