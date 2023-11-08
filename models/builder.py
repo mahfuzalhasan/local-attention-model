@@ -13,7 +13,8 @@ sys.path.append(model_dir)
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+from fvcore.nn import FlopCountAnalysis, flop_count_table
+from ptflops import get_model_complexity_info
 # from utils.init_func import init_weight
 # from utils.load_utils import load_pretrain
 from functools import partial
@@ -109,7 +110,8 @@ class EncoderDecoder(nn.Module):
     
     def init_weights(self, cfg, pretrained=None):
         if pretrained:
-            pretrained = '/home/abjawad/Documents/GitHub/local-attention-model/pretrained/mit_b2.pth'
+            # pretrained = '/home/abjawad/Documents/GitHub/local-attention-model/pretrained/mit_b2.pth'
+            pretrained = cfg.pretrained_model
             logger.info('Loading pretrained model: {}'.format(pretrained))
             self.backbone.init_weights(pretrained=pretrained)
         logger.info('Initing weights ...')
@@ -134,7 +136,7 @@ class EncoderDecoder(nn.Module):
             return out, aux_fm
         return out
 
-    def forward(self, rgb, label):
+    def forward(self, rgb, label=None):
         if self.aux_head:
             out, aux_fm = self.encode_decode(rgb)
         else:
@@ -148,15 +150,69 @@ class EncoderDecoder(nn.Module):
         # unique_values = torch.unique(label)
         # print(unique_values)
         # print('##########################################')
-        loss = self.criterion(out, label.long())
+        if label is not None:
+            loss = self.criterion(out, label.long())
         
         # print(f'loss:{loss}')
         if self.aux_head:
             loss += self.aux_rate * self.criterion(aux_fm, label.long())
-        return loss, out
+            return loss, out
+        return out
 
 
+def sra_flops(h, w, r, dim, num_heads):
+    dim_h = dim / num_heads
+    n1 = h * w
+    n2 = h / r * w / r
 
+    f1 = n1 * dim_h * n2 * num_heads
+    f2 = n1 * n2 * dim_h * num_heads
+
+    return f1 + f2
+
+def get_tr_flops(net, input_shape):
+    flops, params = get_model_complexity_info(net, input_shape, as_strings=False)
+    _, H, W = input_shape
+    net = net.backbone
+    try:
+        stage1 = sra_flops(H // 4, W // 4,
+                           net.block1[0].attn.sr_ratio,
+                           net.block1[0].attn.dim,
+                           net.block1[0].attn.num_heads) * len(net.block1)
+        stage2 = sra_flops(H // 8, W // 8,
+                           net.block2[0].attn.sr_ratio,
+                           net.block2[0].attn.dim,
+                           net.block2[0].attn.num_heads) * len(net.block2)
+        stage3 = sra_flops(H // 16, W // 16,
+                           net.block3[0].attn.sr_ratio,
+                           net.block3[0].attn.dim,
+                           net.block3[0].attn.num_heads) * len(net.block3)
+        stage4 = sra_flops(H // 32, W // 32,
+                           net.block4[0].attn.sr_ratio,
+                           net.block4[0].attn.dim,
+                           net.block4[0].attn.num_heads) * len(net.block4)
+    except:
+        stage1 = sra_flops(H // 4, W // 4,
+                           net.block1[0].attn.squeeze_ratio,
+                           64,
+                           net.block1[0].attn.num_heads) * len(net.block1)
+        stage2 = sra_flops(H // 8, W // 8,
+                           net.block2[0].attn.squeeze_ratio,
+                           128,
+                           net.block2[0].attn.num_heads) * len(net.block2)
+        stage3 = sra_flops(H // 16, W // 16,
+                           net.block3[0].attn.squeeze_ratio,
+                           320,
+                           net.block3[0].attn.num_heads) * len(net.block3)
+        stage4 = sra_flops(H // 32, W // 32,
+                           net.block4[0].attn.squeeze_ratio,
+                           512,
+                           net.block4[0].attn.num_heads) * len(net.block4)
+
+    print(stage1 + stage2 + stage3 + stage4)
+    flops += stage1 + stage2 + stage3 + stage4
+    # return flops_to_string(flops), params_to_string(params)
+    return flops, params
 
 if __name__ == "__main__":
 
@@ -164,8 +220,20 @@ if __name__ == "__main__":
     criterion = nn.CrossEntropyLoss(reduction='mean', ignore_index=config.background)
     model=EncoderDecoder(cfg=config, criterion=criterion, norm_layer=nn.BatchNorm2d)
 
-    input = torch.randn(1, 3, 512, 1024).cuda()
+    input = torch.randn(1, 3, 1024, 1024).cuda()
 
     model.cuda()
+    # flops = FlopCountAnalysis(model, input)
 
+    input_shape = (3, 512, 512)
+    flops, params = get_tr_flops(model, input_shape)
+    
+    # macs, params = get_model_complexity_info(model, (3, 1024, 1024), as_strings=True,
+    #                                        print_per_layer_stat=True, verbose=True)
+    # print('{:<30}  {:<8}'.format('Computational complexity: ', macs))
+    # print('{:<30}  {:<8}'.format('Number of parameters: ', params))
+
+    print('flops:', flops)
+    # print(flop_count_table(flops))
+    print('params:', params)
 
