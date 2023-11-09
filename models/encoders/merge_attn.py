@@ -150,9 +150,6 @@ class MultiScaleAttention(nn.Module):
         x = (attn @ v)
         return x
 
-
-   
-
     # correlation --> B, nh, N_patch, Np, Np
     def merge_correlation_matrices(self, correlation, head_idx):
 
@@ -161,15 +158,21 @@ class MultiScaleAttention(nn.Module):
         else:
             
             small_corr_matrix = self.correlation_matrices[-1]   #B,1,64,16,16
+            print(f'small corr matrices:{small_corr_matrix.shape} ')
             B, nh, N_patch_s, Np_s, Np_s = small_corr_matrix.shape
             _, _, _, Np_l, Np_l = correlation.shape             #B,1,16,64,64
+            print(f'large corr matrices:{correlation.shape} ')
             small_corr_matrix = small_corr_matrix.view(B, nh, -1, Np_l, Np_l) #B,1,4,64,64
+            print(f'reshape small corr matrices:{small_corr_matrix.shape} ')
             correlation = torch.cat([correlation, small_corr_matrix],axis=2)#B,1,20,64,64
             correlation = correlation.squeeze(dim=1)    #B,20,64,64
+            print(f'concat both:{correlation.shape} ')
             
             index = self.calc_index(self.local_region_shape[head_idx-1])
+            print(f' index: {index}, layer:{self.corr_projections[index]}')
             correlation = self.corr_projections[index](correlation)#B,16,64,64
             correlation = correlation.unsqueeze(dim=1)  #B,1,16,64,64
+
         
         return correlation
 
@@ -183,7 +186,7 @@ class MultiScaleAttention(nn.Module):
         kv = self.kv(x).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         k, v = kv[0], kv[1]
         
-        # print(f' k:{k.shape} v:{v.shape} q:{q.shape}')
+        print(f' k:{k.shape} v:{v.shape} q:{q.shape}')
         # print('############################################')
         self.attn_outcome_per_head = []
         self.correlation_matrices = []
@@ -194,7 +197,7 @@ class MultiScaleAttention(nn.Module):
             kh = torch.unsqueeze(kh, dim=1)
             vh = v[:, i, :, :]
             vh = torch.unsqueeze(vh, dim=1)
-            # print(f' head-wise k:{kh.shape} v:{vh.shape} q:{qh.shape}')
+            print(f' head-wise k:{kh.shape} v:{vh.shape} q:{qh.shape}')
             rg_shp = self.local_region_shape[i]
             if rg_shp == 1:
                 a_1 = self.attention_global(qh, kh, vh)

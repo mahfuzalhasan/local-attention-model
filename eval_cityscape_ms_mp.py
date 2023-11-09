@@ -43,6 +43,7 @@ class SegEvaluator(Evaluator):
         # modal_x = data['modal_x']
         name = data['id']
         # print(f'Image Shape: ####  {img.shape} {type(img)}')
+        # print(f'Label Shape: ####  {label.shape} {type(img)}')
 
         img = torch.permute(img, (1, 2, 0))
         img = img.detach().cpu().numpy()
@@ -151,5 +152,9 @@ if __name__ == "__main__":
                                  show_image = False)
         # saved_model_path = os.path.join(config.checkpoint_dir, "07-14-23_1803")
         saved_model_path = config.checkpoint_dir
-        segmentor.run(saved_model_path, "model_495_multiscalemultihead.pth", config.val_log_file,
-                      config.link_val_log_file)
+        saved_model_names = ["model_240_attn_merge_mhms_11-01-23_1037.pth", "model_230_attn_merge_mhms_11-01-23_1037.pth"]
+        
+        for i in range(2):
+            print(f" ####### \n Testing with model {saved_model_names[i]} \n #######")
+            segmentor.run(saved_model_path, saved_model_names[i], config.val_log_file,
+                        config.link_val_log_file)

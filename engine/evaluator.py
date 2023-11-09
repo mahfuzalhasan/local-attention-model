@@ -209,9 +209,10 @@ class Evaluator(object):
     def scale_process_rgbX(self, img, ori_shape, crop_size, stride_rate, device=None):
         new_rows, new_cols, c = img.shape           #480, 640, 3
         long_size = new_cols if new_cols > new_rows else new_rows   #640  #800
-
+        print(f'@@@@@img shape: {img.shape} crop size:{crop_size}')
         # new_rows = 600 # new_cols = 800    
-        if new_cols <= crop_size[1] or new_rows <= crop_size[0]:      
+        if new_cols <= crop_size[1] or new_rows <= crop_size[0]:
+                  
             input_data, margin = self.process_image_rgbX(img, crop_size)
             ### input_data, input_modal_x ---> C, H, W
             score = self.val_func_process_rgbX(input_data, device) 
@@ -245,7 +246,7 @@ class Evaluator(object):
                     s_x = e_x - crop_size[0]        # 0 320
                     s_y = e_y - crop_size[1]        # -40
                     img_sub = img_pad[s_y:e_y, s_x: e_x, :]
-
+                    print(f'$$$$ img sub: {img_sub.shape} crop size:{crop_size} $$$$')
                     input_data, tmargin = self.process_image_rgbX(img_sub, crop_size)
                     temp_score = self.val_func_process_rgbX(input_data, device)
                     
@@ -315,7 +316,7 @@ class Evaluator(object):
     
         if crop_size is not None:       # 480, 640
             p_img, margin = pad_image_to_shape(p_img, crop_size, cv2.BORDER_CONSTANT, value=0)
-            
+            print(f'^^^^ p_img: {p_img.shape} margin:{margin} ^^^^^ ')
             p_img = p_img.transpose(2, 0, 1)   # C, H, W
             # margin --> length of padding on four side
             return p_img, margin
