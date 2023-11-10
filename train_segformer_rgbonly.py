@@ -81,8 +81,8 @@ def Main(parser, cfg, args):
         
         # group weight and config optimizer
         base_lr = config.lr
-        if engine.distributed:
-            base_lr = config.lr
+        # if engine.distributed:
+        #     base_lr = config.lr
         
         params_list = []
         params_list = group_weight(params_list, model, BatchNorm2d, base_lr)
@@ -94,11 +94,7 @@ def Main(parser, cfg, args):
         else:
             raise NotImplementedError
 
-        # config lr policy
-        total_iteration = config.nepochs * config.niters_per_epoch
-        lr_policy = WarmUpPolyLR(base_lr, config.lr_power, total_iteration, config.niters_per_epoch * config.warm_up_epoch)
-        print(f'lr_policy:{vars(lr_policy)}')
-        # exit()
+        
 
     
         starting_epoch = 1
@@ -109,6 +105,22 @@ def Main(parser, cfg, args):
             optimizer.load_state_dict(state_dict['optimizer'])
             starting_epoch = state_dict['epoch']
             print('resuming training with model: ', config.resume_model_path)
+
+        # config lr policy
+        def get_starting_lr(optimizer):
+            for param_group in optimizer.param_groups:
+                return param_group['lr']
+
+        starting_lr = base_lr
+        if config.resume_train:
+            starting_lr = get_starting_lr(optimizer)
+            
+
+        total_iteration = config.nepochs * config.niters_per_epoch
+        lr_policy = WarmUpPolyLR(starting_lr, config.lr_power, total_iteration, config.niters_per_epoch * config.warm_up_epoch)
+        print(f'lr_policy:{vars(lr_policy)}')
+        print('$$$$$ starting lr $$$$$$ : ',starting_lr)
+        # exit()
 
         if engine.distributed:
                 logger.info('.............distributed training.............')
