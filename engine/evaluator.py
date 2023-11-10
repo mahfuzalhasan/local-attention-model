@@ -93,7 +93,7 @@ class Evaluator(object):
             if len(self.devices ) == 1:
                 result_line = self.single_process_evalutation()
             else:
-                result_line = self.multi_process_evaluation()
+                result_line, _ = self.multi_process_evaluation()
 
             results.write('Model: ' + model + '\n')
             results.write(result_line)
@@ -159,7 +159,7 @@ class Evaluator(object):
             p.join()
 
         result_line, output_dict = self.compute_metric(all_results)
-        #print("all results multi process: ",all_results)
+        # print("all results multi process: ",all_results)
         logger.info(
             'Evaluation Elapsed Time: %.2fs' % (
                     time.perf_counter() - start_eval_time))
@@ -190,12 +190,13 @@ class Evaluator(object):
     def sliding_eval_rgbX(self, img, crop_size, stride_rate, device=None):
         crop_size = to_2tuple(crop_size)
         ori_rows, ori_cols, _ = img.shape
+        # print(f'original shape: {img.shape}')
         processed_pred = np.zeros((ori_rows, ori_cols, self.class_num))
 
         for s in self.multi_scales:     #[1]
             ### img resize to scale
             img_scale = cv2.resize(img, None, fx=s, fy=s, interpolation=cv2.INTER_LINEAR)
-
+            # print(f's:{s} img scaled:{img_scale.shape}')
             new_rows, new_cols, _ = img_scale.shape
             # H, W, C --> 480, 640, #num_class
             # if scale 1.25 --> img_scale.shape = 600, 800, 3
@@ -209,9 +210,9 @@ class Evaluator(object):
     def scale_process_rgbX(self, img, ori_shape, crop_size, stride_rate, device=None):
         new_rows, new_cols, c = img.shape           #480, 640, 3
         long_size = new_cols if new_cols > new_rows else new_rows   #640  #800
-        print(f'@@@@@img shape: {img.shape} crop size:{crop_size}')
+        # print(f'@@@@@img shape: {img.shape} crop size:{crop_size}')
         # new_rows = 600 # new_cols = 800    
-        if new_cols <= crop_size[1] or new_rows <= crop_size[0]:
+        if new_cols <= crop_size[1] and new_rows <= crop_size[0]:
                   
             input_data, margin = self.process_image_rgbX(img, crop_size)
             ### input_data, input_modal_x ---> C, H, W
@@ -226,7 +227,7 @@ class Evaluator(object):
             # img_pad --> 600, 800, 3
             img_pad, margin = pad_image_to_shape(img, crop_size, cv2.BORDER_CONSTANT, value=0)
             # modal_x_pad, margin = pad_image_to_shape(modal_x, crop_size, cv2.BORDER_CONSTANT, value=0)
-
+            # print(f'img_pad: {img_pad.shape}')
             pad_rows = img_pad.shape[0]     # 600
             pad_cols = img_pad.shape[1]     # 800
             r_grid = int(np.ceil((pad_rows - crop_size[0]) / stride[0])) + 1    #2
@@ -246,8 +247,9 @@ class Evaluator(object):
                     s_x = e_x - crop_size[0]        # 0 320
                     s_y = e_y - crop_size[1]        # -40
                     img_sub = img_pad[s_y:e_y, s_x: e_x, :]
-                    print(f'$$$$ img sub: {img_sub.shape} crop size:{crop_size} $$$$')
+                    # print(f'$$$$ img sub: {img_sub.shape} crop size:{crop_size} $$$$')
                     input_data, tmargin = self.process_image_rgbX(img_sub, crop_size)
+                    # print(f'input data:{input_data.shape}')
                     temp_score = self.val_func_process_rgbX(input_data, device)
                     
                     temp_score = temp_score[:, tmargin[0]:(temp_score.shape[1] - tmargin[1]),
@@ -316,7 +318,7 @@ class Evaluator(object):
     
         if crop_size is not None:       # 480, 640
             p_img, margin = pad_image_to_shape(p_img, crop_size, cv2.BORDER_CONSTANT, value=0)
-            print(f'^^^^ p_img: {p_img.shape} margin:{margin} ^^^^^ ')
+            # print(f'^^^^ p_img: {p_img.shape} margin:{margin} ^^^^^ ')
             p_img = p_img.transpose(2, 0, 1)   # C, H, W
             # margin --> length of padding on four side
             return p_img, margin

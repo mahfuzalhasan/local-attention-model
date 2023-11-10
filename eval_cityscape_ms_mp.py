@@ -152,9 +152,11 @@ if __name__ == "__main__":
                                  show_image = False)
         # saved_model_path = os.path.join(config.checkpoint_dir, "07-14-23_1803")
         saved_model_path = config.checkpoint_dir
-        saved_model_names = ["model_240_attn_merge_mhms_11-01-23_1037.pth", "model_230_attn_merge_mhms_11-01-23_1037.pth"]
+        saved_model_names = ["model_435_11-06-23_0957.pth", "model_495_11-06-23_0957.pth"]
         
-        for i in range(2):
+        for i in range(len(saved_model_names)):
+            name = saved_model_names[i][:saved_model_names[i].rindex('.')]+'.log'
+            log_file = os.path.join(config.log_dir, name)
             print(f" ####### \n Testing with model {saved_model_names[i]} \n #######")
-            segmentor.run(saved_model_path, saved_model_names[i], config.val_log_file,
+            segmentor.run(saved_model_path, saved_model_names[i], log_file,
                         config.link_val_log_file)

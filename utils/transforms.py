@@ -73,7 +73,7 @@ def pad_image_to_shape(img, shape, border_mode, value):
 
     img = cv2.copyMakeBorder(img, margin[0], margin[1], margin[2], margin[3],
                              border_mode, value=value)
-
+    
     return img, margin
 
 def pad_image_size_to_multiples_of(img, multiple, pad_value):

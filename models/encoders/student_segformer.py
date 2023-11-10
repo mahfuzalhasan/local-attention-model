@@ -259,7 +259,7 @@ class RGBXTransformer(nn.Module):
         """
         x_rgb: B x N x H x W
         """
-        print('input: ',x_rgb.shape)
+        # print('input: ',x_rgb.shape)
         B = x_rgb.shape[0]
         outs = []
         outs_fused = []
@@ -268,7 +268,7 @@ class RGBXTransformer(nn.Module):
         x_rgb, H, W = self.patch_embed1(x_rgb)
 
         # print('############### Stage 1 ##########################')
-        print('tokenization: ',x_rgb.shape)
+        # print('tokenization: ',x_rgb.shape)
 
         # exit()
         # B H*W/16 C
