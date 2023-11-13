@@ -149,6 +149,7 @@ class MultiScaleAttention(nn.Module):
     def merge_correlation_matrices(self, correlation, head_idx):
 
         if self.local_region_shape[head_idx-1]==self.local_region_shape[head_idx]:
+            # SILU
             correlation += self.correlation_matrices[-1]
         else:
             small_corr_matrix = self.correlation_matrices[-1]   #B,1,64,16,16
@@ -159,6 +160,7 @@ class MultiScaleAttention(nn.Module):
             index = self.calc_index(self.local_region_shape[head_idx-1])
             extended_small_corr = self.corr_projections[index](small_corr_matrix.squeeze(dim=1))#B,16,64,64
             extended_small_corr = extended_small_corr.unsqueeze(dim=1)  #B,1,16,64,64
+            # SILU 
             correlation += extended_small_corr                          #B,1,16,64,64
 
         return correlation
