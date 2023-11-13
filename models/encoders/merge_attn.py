@@ -138,7 +138,7 @@ class MultiScaleAttention(nn.Module):
 
 
     def attention(self, corr, v):
-        attn = corr.softmax(dim=-1)      #  couldn't figure out yet
+        attn = corr.softmax(dim=-1)      
         attn = self.attn_drop(attn)
         x = (attn @ v)
         return x, attn
@@ -154,6 +154,7 @@ class MultiScaleAttention(nn.Module):
     def merge_correlation_matrices(self, correlation, head_idx):
 
         if self.local_region_shape[head_idx-1]==self.local_region_shape[head_idx]:
+            # SILU
             correlation += self.correlation_matrices[-1]
         else:
             
@@ -173,7 +174,6 @@ class MultiScaleAttention(nn.Module):
             correlation = self.corr_projections[index](correlation)#B,16,64,64
             correlation = correlation.unsqueeze(dim=1)  #B,1,16,64,64
 
-        
         return correlation
 
 
