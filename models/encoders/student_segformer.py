@@ -13,7 +13,7 @@ sys.path.append(parent_dir)
 model_dir = os.path.abspath(os.path.join(parent_dir, os.pardir))
 sys.path.append(model_dir)
 
-from merge_attn import MultiScaleAttention
+from merge_global_attn import MultiScaleAttention
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 from net_utils import FeatureFusionModule as FFM
 from net_utils import FeatureRectifyModule as FRM
@@ -196,6 +196,7 @@ class RGBXTransformer(nn.Module):
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]  # stochastic depth decay rule
         cur = 0
 
+        # 128x128
         self.block1 = nn.ModuleList([Block(
             dim=embed_dims[0], num_heads=num_heads[0], mlp_ratio=mlp_ratios[0], qkv_bias=qkv_bias, qk_scale=qk_scale,
             drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
@@ -205,6 +206,7 @@ class RGBXTransformer(nn.Module):
 
         cur += depths[0]
 
+        # 64x64
         self.block2 = nn.ModuleList([Block(
             dim=embed_dims[1], num_heads=num_heads[1], mlp_ratio=mlp_ratios[1], qkv_bias=qkv_bias, qk_scale=qk_scale,
             drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
@@ -214,19 +216,21 @@ class RGBXTransformer(nn.Module):
 
         cur += depths[1]
 
+        # 32x32
         self.block3 = nn.ModuleList([Block(
             dim=embed_dims[2], num_heads=num_heads[2], mlp_ratio=mlp_ratios[2], qkv_bias=qkv_bias, qk_scale=qk_scale,
             drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
-            sr_ratio=sr_ratios[2], local_region_shape=[1, 2, 2, 4, 4], img_size=(img_size[0]// 16,img_size[1]//16))
+            sr_ratio=sr_ratios[2], local_region_shape=[2, 4, 4, 8, 8], img_size=(img_size[0]// 16,img_size[1]//16))
             for i in range(depths[2])])
         self.norm3 = norm_layer(embed_dims[2])
 
         cur += depths[2]
 
+        # 16x16
         self.block4 = nn.ModuleList([Block(
             dim=embed_dims[3], num_heads=num_heads[3], mlp_ratio=mlp_ratios[3], qkv_bias=qkv_bias, qk_scale=qk_scale,
             drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
-            sr_ratio=sr_ratios[3], local_region_shape=[1, 1, 1, 1, 2, 2, 2, 2], img_size=(img_size[0]// 32,img_size[1]//32))
+            sr_ratio=sr_ratios[3], local_region_shape=[2, 2, 2, 4, 4, 4, 8, 8], img_size=(img_size[0]// 32,img_size[1]//32))
             for i in range(depths[3])])
         self.norm4 = norm_layer(embed_dims[3])
 
@@ -381,7 +385,7 @@ class mit_b2(RGBXTransformer):
         super(mit_b2, self).__init__(
             img_size=(512, 512), patch_size=4, embed_dims=[64, 128, 320, 512], 
             num_heads=[2, 4, 5, 8], mlp_ratios=[4, 4, 4, 4], qkv_bias=True, 
-            norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 4, 6, 3], 
+            norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[1, 1, 1, 1], 
             sr_ratios=[8, 4, 2, 1], drop_rate=0.0, drop_path_rate=0.1)
 
 
