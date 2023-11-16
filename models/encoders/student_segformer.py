@@ -40,6 +40,7 @@ class DWConv(nn.Module):
     def __init__(self, dim=768):
         super(DWConv, self).__init__()
         self.dwconv = nn.Conv2d(dim, dim, kernel_size=3, stride=1, padding=1, bias=True, groups=dim)
+        self.dim = dim
 
     def forward(self, x, H, W):
         B, N, C = x.shape
@@ -48,6 +49,13 @@ class DWConv(nn.Module):
         x = x.flatten(2).transpose(1, 2) # B C H W -> B N C
 
         return x
+    
+    def flops(self, H, W):
+        # Calculate FLOPs for the depthwise convolution operation
+        flops_dwconv = H * W * self.dim * 3 * 3 * 2  # kernel_size=3, stride=1
+        # 3x3 kernel, input channels = dim, output channels = dim, multiply by 2 (for multiply and add)
+
+        return flops_dwconv
 
 
 class Mlp(nn.Module):
@@ -82,6 +90,9 @@ class Mlp(nn.Module):
                 m.bias.data.zero_()
 
     def forward(self, x, H, W):
+        self.H = H
+        self.W = W
+        print('input: MLP ',x.shape, H, W)
         x = self.fc1(x)
         x = self.dwconv(x, H, W)
         x = self.act(x)
@@ -89,6 +100,15 @@ class Mlp(nn.Module):
         x = self.fc2(x)
         x = self.drop(x)
         return x
+    
+    def flops(self):
+        H, W = self.H, self.W
+        flops_mlp = H * W * self.fc1.in_features * self.fc1.out_features * 2
+        flops_mlp += self.dwconv.flops(H, W)
+        flops_mlp += H * W * self.fc2.in_features * self.fc2.out_features * 2
+        return flops_mlp
+    
+
 
 class Block(nn.Module):
     """
@@ -110,6 +130,7 @@ class Block(nn.Module):
         self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
 
         self.apply(self._init_weights)
+        print('====== block ======', dim, num_heads, mlp_ratio, qkv_bias, qk_scale, drop, attn_drop, drop_path, act_layer, norm_layer, sr_ratio, local_region_shape, img_size)
 
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
@@ -127,10 +148,21 @@ class Block(nn.Module):
                 m.bias.data.zero_()
 
     def forward(self, x, H, W):
+        print('+++++++++ block +++++ input: ',x.shape, H, W)
         x = x + self.drop_path(self.attn(self.norm1(x), H, W))
         x = x + self.drop_path(self.mlp(self.norm2(x), H, W))
 
         return x
+
+    def flops(self):
+        # FLOPs for MultiScaleAttention
+        attn_flops = self.attn.flops()
+
+        # FLOPs for Mlp
+        mlp_flops = self.mlp.flops()
+
+        total_flops = attn_flops + mlp_flops
+        return total_flops
 
 
 class OverlapPatchEmbed(nn.Module):
@@ -140,10 +172,15 @@ class OverlapPatchEmbed(nn.Module):
     def __init__(self, patch_size=7, stride=4, in_chans=3, embed_dim=768):
         super().__init__()
         patch_size = to_2tuple(patch_size)
+        self.stride = stride
+        self.in_chans = in_chans
+        self.embed_dim = embed_dim
+        self.input_shape = None
+
         self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=stride,
                               padding=(patch_size[0] // 2, patch_size[1] // 2))
         self.norm = nn.LayerNorm(embed_dim)
-
+        self.patch_size = patch_size
         self.apply(self._init_weights)
 
     def _init_weights(self, m):
@@ -163,6 +200,7 @@ class OverlapPatchEmbed(nn.Module):
 
     def forward(self, x):
         # B C H W
+        self.input_shape = x.shape
         x = self.proj(x)
         # print('x after proj: ',x.shape)
         _, _, H, W = x.shape
@@ -171,6 +209,12 @@ class OverlapPatchEmbed(nn.Module):
         x = self.norm(x)
 
         return x, H, W
+    
+    def flops(self):
+        h, w = self.input_shape[-2:]
+        flops = h * w * self.embed_dim * self.in_chans * self.patch_size[0] * self.patch_size[1] / (self.stride ** 2)
+        return flops
+        pass
 
 
 # How to apply multihead multiscale
@@ -335,6 +379,23 @@ class RGBXTransformer(nn.Module):
         # print()
         out = self.forward_features(x_rgb)
         return out
+    
+    def flop(self):
+        flops = 0
+        flops += self.patch_embed1.flops()
+        flops += self.patch_embed2.flops()
+        flops += self.patch_embed3.flops()
+        flops += self.patch_embed4.flops()
+
+        for i, blk in enumerate(self.block1):
+            flops += blk.flops()
+        for i, blk in enumerate(self.block2):
+            flops += blk.flops()
+        for i, blk in enumerate(self.block3):
+            flops += blk.flops()
+        for i, blk in enumerate(self.block4):
+            flops += blk.flops()
+        return flops
 
 
 def load_dualpath_model(model, model_file):

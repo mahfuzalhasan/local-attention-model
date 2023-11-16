@@ -24,14 +24,14 @@ def get_relative_position_index(win_h: int, win_w: int) -> torch.Tensor:
     relative_coords[:, :, 0] *= 2 * win_w - 1
     return relative_coords.sum(-1)
 
-# ms_attention = MultiScaleAttention(512, num_heads=8, sr_ratio=8, local_region_shape=[2, 2, 2, 2, 1, 1, 1, 1])
+
 
 class MultiScaleAttention(nn.Module):
     def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., 
                     proj_drop=0., sr_ratio=1, local_region_shape = [4, 8, 40], img_size=(32,32)):
         super().__init__()
         assert dim % num_heads == 0, f"dim {dim} should be divided by num_heads {num_heads}."
-
+        
         self.dim = dim
         self.num_heads = num_heads
         self.img_size = img_size
@@ -74,25 +74,16 @@ class MultiScaleAttention(nn.Module):
             self.sr = nn.Conv2d(dim, dim, kernel_size=sr_ratio, stride=sr_ratio)
             self.norm = nn.LayerNorm(dim)
         self.apply(self._init_weights)
+        print('merge attn multiscale attention ', dim, num_heads, qkv_bias, qk_scale, attn_drop, proj_drop, sr_ratio, local_region_shape, img_size)
 
     def proj_channel_conv(self, small_patch, large_patch):
-        N = self.img_size[0] * self.img_size[1]   # (1024 = 32 x 32)
+        N = self.img_size[0] * self.img_size[1]   
 
-        N_small_patch = N // (small_patch ** 2)     # 64
-        N_large_patch = N // (large_patch ** 2)     # 16
+        N_small_patch = N // (small_patch ** 2)    
+        N_large_patch = N // (large_patch ** 2)    
 
         #print('Ns, Nl: ',N_small_patch, N_large_patch)
-        ratio = (large_patch ** 2) // (small_patch ** 2)    # 4
-
-        #print('ratio: ',ratio)
-
-        # sa = (B, 1, 64, 16 ,16)
-        # ba = (B, 1, 16, 64 ,64)
-
-        # sa --> ba : sa =  (B, 1, 64/(4**2), 64, 64) = (B, 1, 4, 64, 64)
-
-        # bsa = sa concat ba = B, 1, 20, 64, 64
-        #  bsa --> ba = 1x1conv(( 4 + 16), 16, 1)
+        ratio = (large_patch ** 2) // (small_patch ** 2)   
 
         reduced_patch = N_small_patch // (ratio**2)   
 
@@ -158,27 +149,28 @@ class MultiScaleAttention(nn.Module):
             correlation += self.correlation_matrices[-1]
         else:
             
-            small_corr_matrix = self.correlation_matrices[-1]   #B,1,64,16,16
+            small_corr_matrix = self.correlation_matrices[-1] 
             #print(f'small corr matrices:{small_corr_matrix.shape} ')
             B, nh, N_patch_s, Np_s, Np_s = small_corr_matrix.shape
-            _, _, _, Np_l, Np_l = correlation.shape             #B,1,16,64,64
+            _, _, _, Np_l, Np_l = correlation.shape        
             #print(f'large corr matrices:{correlation.shape} ')
-            small_corr_matrix = small_corr_matrix.view(B, nh, -1, Np_l, Np_l) #B,1,4,64,64
+            small_corr_matrix = small_corr_matrix.view(B, nh, -1, Np_l, Np_l) 
             #print(f'reshape small corr matrices:{small_corr_matrix.shape} ')
-            correlation = torch.cat([correlation, small_corr_matrix],axis=2)#B,1,20,64,64
-            correlation = correlation.squeeze(dim=1)    #B,20,64,64
+            correlation = torch.cat([correlation, small_corr_matrix],axis=2)
+            correlation = correlation.squeeze(dim=1)    
             #print(f'concat both:{correlation.shape} ')
             
             index = self.calc_index(self.local_region_shape[head_idx-1])
             #print(f' index: {index}, layer:{self.corr_projections[index]}')
-            correlation = self.corr_projections[index](correlation)#B,16,64,64
-            correlation = correlation.unsqueeze(dim=1)  #B,1,16,64,64
+            correlation = self.corr_projections[index](correlation)
+            correlation = correlation.unsqueeze(dim=1)  
 
         return correlation
 
 
     def forward(self, x, H, W):
-        #####print('!!!!!!!!!!!!attention head: ',self.num_heads, ' !!!!!!!!!!')
+        print('!!!!!!!!!!!!attention head: ',self.num_heads, ' !!!!!!!!!!')
+        print(x.shape, H, W)
         A = []
         B, N, C = x.shape
         
@@ -207,7 +199,6 @@ class MultiScaleAttention(nn.Module):
                 q_patch = self.patchify(qh, H, W, rg_shp)
                 k_patch = self.patchify(kh, H, W, rg_shp)
                 v_patch = self.patchify(vh, H, W, rg_shp)
-
                 
                 B, Nh, N_Patch, Np, Ch = q_patch.shape
                 # q_p, k_p, v_p = map(lambda t: rearrange(t, 'b h n d -> (b h) n d', h = Nh), (q_patch, k_patch, v_patch))
@@ -235,6 +226,31 @@ class MultiScaleAttention(nn.Module):
         attn_fused = self.proj(attn_fused)
         attn_fused = self.proj_drop(attn_fused )
         return attn_fused
+    
+    def flops(self):
+        # FLOPs for linear layers
+        flops_linear_q = (2 * self.dim - 1) * self.dim
+        flops_linear_kv = (2 * self.dim - 1) * 2 * self.dim
+        flops_linear_proj = (2 * self.dim - 1) * self.dim
+
+        # FLOPs for attention calculation
+        # TODO: Calculate FLOPs for attention mechanism, including matrix multiplications and softmax operations
+
+        # FLOPs for patchify and correlation calculations
+        # TODO: Estimate FLOPs for patchify and correlation steps
+
+        # FLOPs for projection and dropout layers
+        flops_proj = (2 * self.dim - 1) * self.dim
+
+        total_flops = (
+            flops_linear_q + flops_linear_kv + flops_linear_proj +  # Linear layers
+            # FLOPs for attention calculation +
+            # FLOPs for patchify and correlation calculations +
+            flops_proj  # Projection and dropout
+        )
+
+        return total_flops
+
 
 if __name__=="__main__":
     # #######print(backbone)
