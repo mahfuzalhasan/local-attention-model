@@ -130,7 +130,7 @@ class Block(nn.Module):
         self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
 
         self.apply(self._init_weights)
-        print('====== block ======', dim, num_heads, mlp_ratio, qkv_bias, qk_scale, drop, attn_drop, drop_path, act_layer, norm_layer, sr_ratio, local_region_shape, img_size)
+        # print('====== block ======', dim, num_heads, mlp_ratio, qkv_bias, qk_scale, drop, attn_drop, drop_path, act_layer, norm_layer, sr_ratio, local_region_shape, img_size)
 
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
@@ -380,7 +380,7 @@ class RGBXTransformer(nn.Module):
         out = self.forward_features(x_rgb)
         return out
     
-    def flop(self):
+    def flops(self):
         flops = 0
         flops += self.patch_embed1.flops()
         flops += self.patch_embed2.flops()

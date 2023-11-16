@@ -74,7 +74,7 @@ class MultiScaleAttention(nn.Module):
             self.sr = nn.Conv2d(dim, dim, kernel_size=sr_ratio, stride=sr_ratio)
             self.norm = nn.LayerNorm(dim)
         self.apply(self._init_weights)
-        print('merge attn multiscale attention ', dim, num_heads, qkv_bias, qk_scale, attn_drop, proj_drop, sr_ratio, local_region_shape, img_size)
+        # print('merge attn multiscale attention ', dim, num_heads, qkv_bias, qk_scale, attn_drop, proj_drop, sr_ratio, local_region_shape, img_size)
 
     def proj_channel_conv(self, small_patch, large_patch):
         N = self.img_size[0] * self.img_size[1]   
