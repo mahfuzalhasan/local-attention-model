@@ -45,17 +45,36 @@ class DWConv(nn.Module):
     def forward(self, x, H, W):
         B, N, C = x.shape
         x = x.permute(0, 2, 1).reshape(B, C, H, W).contiguous() # B N C -> B C N -> B C H W
+        self.input_shape = x.shape
         x = self.dwconv(x) 
         x = x.flatten(2).transpose(1, 2) # B C H W -> B N C
 
         return x
-    
-    def flops(self, H, W):
-        # Calculate FLOPs for the depthwise convolution operation
-        flops_dwconv = H * W * self.dim * 3 * 3 * 2  # kernel_size=3, stride=1
-        # 3x3 kernel, input channels = dim, output channels = dim, multiply by 2 (for multiply and add)
+    # # FLOPs = (2 * input_channels * kernel_size^2 * output_channels * output_height * output_width) / stride^2
+    # def flops(self, H, W):
+    #     # Calculate FLOPs for the depthwise convolution operation
+    #     flops_dwconv = H * W * self.dim * 3 * 3 * 2  # kernel_size=3, stride=1
+    #     # 3x3 kernel, input channels = dim, output channels = dim, multiply by 2 (for multiply and add)
 
-        return flops_dwconv
+    #     return flops_dwconv
+    
+    def flops(self):
+        # Correct calculation for output dimensions
+        padding = (1,1) 
+        kernel_size = (3,3)
+        stride = 1
+        groups = self.dim
+        in_chans = self.dim
+        out_chans = self.dim
+
+        output_height = ((self.input_shape[2] + 2 * padding[0] - kernel_size[0]) // stride) + 1
+        output_width = ((self.input_shape[3] + 2 * padding[1] - kernel_size[1]) // stride) + 1
+
+        # Convolution layer FLOPs
+        conv_flops = 2 * out_chans * output_height * output_width * kernel_size[0] * kernel_size[1] * in_chans / groups
+
+        total_flops = conv_flops
+        return total_flops
 
 
 class Mlp(nn.Module):
@@ -90,8 +109,8 @@ class Mlp(nn.Module):
                 m.bias.data.zero_()
 
     def forward(self, x, H, W):
-        self.H = H
-        self.W = W
+        # self.H = H
+        # self.W = W
         print('input: MLP ',x.shape, H, W)
         x = self.fc1(x)
         x = self.dwconv(x, H, W)
@@ -102,10 +121,10 @@ class Mlp(nn.Module):
         return x
     
     def flops(self):
-        H, W = self.H, self.W
-        flops_mlp = H * W * self.fc1.in_features * self.fc1.out_features * 2
-        flops_mlp += self.dwconv.flops(H, W)
-        flops_mlp += H * W * self.fc2.in_features * self.fc2.out_features * 2
+        # H, W = self.H, self.W
+        flops_mlp = self.fc1.in_features * self.fc1.out_features * 2
+        flops_mlp += self.dwconv.flops()
+        flops_mlp += self.fc2.in_features * self.fc2.out_features * 2
         return flops_mlp
     
 
@@ -201,20 +220,30 @@ class OverlapPatchEmbed(nn.Module):
     def forward(self, x):
         # B C H W
         self.input_shape = x.shape
+        print('x before proj: ',x.shape)
         x = self.proj(x)
-        # print('x after proj: ',x.shape)
+        print('x after proj: ',x.shape)
         _, _, H, W = x.shape
         x = x.flatten(2).transpose(1, 2)
         # B H*W/16 C
         x = self.norm(x)
+        print('x after norm: !!!!!!!!!!!!!!!!!! ',x.shape)
 
         return x, H, W
-    
     def flops(self):
-        h, w = self.input_shape[-2:]
-        flops = h * w * self.embed_dim * self.in_chans * self.patch_size[0] * self.patch_size[1] / (self.stride ** 2)
-        return flops
-        pass
+        # Correct calculation for output dimensions
+        padding = (self.patch_size[0] // 2, self.patch_size[1] // 2)
+        output_height = ((self.input_shape[2] + 2 * padding[0] - self.patch_size[0]) // self.stride) + 1
+        output_width = ((self.input_shape[3] + 2 * padding[1] - self.patch_size[1]) // self.stride) + 1
+
+        # Convolution layer FLOPs
+        conv_flops = 2 * self.embed_dim * output_height * output_width * self.patch_size[0] * self.patch_size[1] * self.in_chans
+
+        # Layer normalization FLOPs
+        norm_flops = 2 * self.embed_dim * output_height * output_width
+
+        total_flops = conv_flops + norm_flops
+        return total_flops
 
 
 # How to apply multihead multiscale
@@ -261,7 +290,7 @@ class RGBXTransformer(nn.Module):
         self.block3 = nn.ModuleList([Block(
             dim=embed_dims[2], num_heads=num_heads[2], mlp_ratio=mlp_ratios[2], qkv_bias=qkv_bias, qk_scale=qk_scale,
             drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
-            sr_ratio=sr_ratios[2], local_region_shape=[2, 4, 4, 8, 8], img_size=(img_size[0]// 16,img_size[1]//16))
+            sr_ratio=sr_ratios[2], local_region_shape=[1 ,2, 2, 4, 4], img_size=(img_size[0]// 16,img_size[1]//16))
             for i in range(depths[2])])
         self.norm3 = norm_layer(embed_dims[2])
 
@@ -270,7 +299,7 @@ class RGBXTransformer(nn.Module):
         self.block4 = nn.ModuleList([Block(
             dim=embed_dims[3], num_heads=num_heads[3], mlp_ratio=mlp_ratios[3], qkv_bias=qkv_bias, qk_scale=qk_scale,
             drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
-            sr_ratio=sr_ratios[3], local_region_shape=[2, 2, 4, 4, 8, 8, 16, 16], img_size=(img_size[0]// 32,img_size[1]//32))
+            sr_ratio=sr_ratios[3], local_region_shape=[1, 1, 1, 1, 2, 2, 2, 2], img_size=(img_size[0]// 32,img_size[1]//32))
             for i in range(depths[3])])
         self.norm4 = norm_layer(embed_dims[3])
 
@@ -395,6 +424,7 @@ class RGBXTransformer(nn.Module):
             flops += blk.flops()
         for i, blk in enumerate(self.block4):
             flops += blk.flops()
+        
         return flops
 
 

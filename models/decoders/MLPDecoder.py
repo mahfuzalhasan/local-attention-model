@@ -12,12 +12,15 @@ class MLP(nn.Module):
     def __init__(self, input_dim=2048, embed_dim=768):
         super().__init__()
         self.proj = nn.Linear(input_dim, embed_dim)
+        self.input_dim = input_dim
+        self.embed_dim = embed_dim
 
     def forward(self, x):
         x = x.flatten(2).transpose(1, 2)
         x = self.proj(x)
         return x
-
+    
+    
 
 class DecoderHead(nn.Module):
     def __init__(self,
@@ -32,7 +35,7 @@ class DecoderHead(nn.Module):
         self.num_classes = num_classes
         self.dropout_ratio = dropout_ratio
         self.align_corners = align_corners
-        
+        self.embed_dim = embed_dim
         self.in_channels = in_channels
         
         if dropout_ratio > 0:
@@ -43,6 +46,9 @@ class DecoderHead(nn.Module):
         c1_in_channels, c2_in_channels, c3_in_channels, c4_in_channels = self.in_channels
 
         embedding_dim = embed_dim
+        
+        
+
         self.linear_c4 = MLP(input_dim=c4_in_channels, embed_dim=embedding_dim)
         self.linear_c3 = MLP(input_dim=c3_in_channels, embed_dim=embedding_dim)
         self.linear_c2 = MLP(input_dim=c2_in_channels, embed_dim=embedding_dim)
@@ -59,6 +65,8 @@ class DecoderHead(nn.Module):
     def forward(self, inputs):
         # len=4, 1/4,1/8,1/16,1/32
         c1, c2, c3, c4 = inputs
+
+        print("---------forwardMLP----=========", c1.shape, c2.shape, c3.shape, c4.shape)
         
         ############## MLP decoder on C1-C4 ###########
         n, _, h, w = c4.shape
@@ -73,11 +81,35 @@ class DecoderHead(nn.Module):
         _c2 = F.interpolate(_c2, size=c1.size()[2:],mode='bilinear',align_corners=self.align_corners)
 
         _c1 = self.linear_c1(c1).permute(0,2,1).reshape(n, -1, c1.shape[2], c1.shape[3])
-
+        # print("---------forwardMLP----=========", _c1.shape, _c2.shape, _c3.shape, _c4.shape)
+        
+        self.output_size_1 = _c1.size()[2:]
         _c = self.linear_fuse(torch.cat([_c4, _c3, _c2, _c1], dim=1))
+        # print("---------forwardMLP----=========", _c.shape)
         x = self.dropout(_c)
         x = self.linear_pred(x)
+        self.output_size_2 = x.size()[2:]
+        # print("---------forwardMLP----=========", self.output_size_1, self.output_size_2)
 
         return x
+    def flops_MLP(self, input_dim, embed_dim):
+        # MLP Linear layer FLOPs
+        return 2 * input_dim * embed_dim
+
+
+    def flops(self):
+        total_flops = 0
+
+        # FLOPs for MLP layers
+        for c in self.in_channels:
+            total_flops += self.flops_MLP(c, self.embed_dim)
+
+        # FLOPs for linear_fuse convolution
+        total_flops += (2* 1 * 1 * self.embed_dim * self.embed_dim * 4 * self.output_size_1[0] * self.output_size_1[1])
+        total_flops += self.output_size_1[0] * self.output_size_1[1] * self.embed_dim
+        # FLOPs for linear_pred convolution
+        total_flops +=  (2* 1 * 1 * self.embed_dim  *self.num_classes * self.output_size_2[0] * self.output_size_2[1])
+
+        return total_flops
 
         

@@ -132,3 +132,7 @@ class EncoderDecoder(nn.Module):
             if self.aux_head:
                 loss += self.aux_rate * self.criterion(aux_fm, label.long())
             return loss, out
+        
+    def flops(self):
+        return self.backbone.flops() + self.decode_head.flops()
+

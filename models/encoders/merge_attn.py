@@ -171,6 +171,8 @@ class MultiScaleAttention(nn.Module):
     def forward(self, x, H, W):
         print('!!!!!!!!!!!!attention head: ',self.num_heads, ' !!!!!!!!!!')
         print(x.shape, H, W)
+        self.H=H
+        self.W=W
         A = []
         B, N, C = x.shape
         
@@ -229,26 +231,27 @@ class MultiScaleAttention(nn.Module):
     
     def flops(self):
         # FLOPs for linear layers
-        flops_linear_q = (2 * self.dim - 1) * self.dim
-        flops_linear_kv = (2 * self.dim - 1) * 2 * self.dim
-        flops_linear_proj = (2 * self.dim - 1) * self.dim
+        flops_linear_q = 2 * self.dim * self.dim
+        flops_linear_kv = 2 * self.dim * self.dim * 2
+        head_dim = self.dim // self.num_heads
+        flops = 0
+        print("number of heads ", self.num_heads)
+        for i in range(self.num_heads):
+            r_size = self.local_region_shape[i]
+            if r_size == 1:
+                N = self.H * self.W
+                flops_attention_weight = N * head_dim * N
+                flops_attention_output = N * N * head_dim
 
-        # FLOPs for attention calculation
-        # TODO: Calculate FLOPs for attention mechanism, including matrix multiplications and softmax operations
+            else:
+                region_number = (self.H * self.W) // (r_size ** 2)
+                p = r_size ** 2
+                flops_attention_weight = region_number * (p * head_dim * p)
+                flops_attention_output = region_number * (p * p * head_dim)
+            flops_head = flops_attention_weight + flops_attention_output
+            flops += flops_head    
 
-        # FLOPs for patchify and correlation calculations
-        # TODO: Estimate FLOPs for patchify and correlation steps
-
-        # FLOPs for projection and dropout layers
-        flops_proj = (2 * self.dim - 1) * self.dim
-
-        total_flops = (
-            flops_linear_q + flops_linear_kv + flops_linear_proj +  # Linear layers
-            # FLOPs for attention calculation +
-            # FLOPs for patchify and correlation calculations +
-            flops_proj  # Projection and dropout
-        )
-
+        total_flops = flops_linear_q + flops_linear_kv + flops
         return total_flops
 
 

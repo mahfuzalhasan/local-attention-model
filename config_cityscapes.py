@@ -57,8 +57,8 @@ C.norm_mean = np.array([0.291,  0.329,  0.291]) # For CityScape
 C.norm_std = np.array([0.190,  0.190,  0.185])
 
 """ Settings for network, this would be different for each kind of model"""
-C.backbone = 'mit_b2' # Remember change the path below.
-C.pretrained_model = osp.join(C.root_dir, 'pretrained/mit_b2_imagenet.pth')
+C.backbone = 'mit_b0' # Remember change the path below.
+# C.pretrained_model = osp.join(C.root_dir, 'pretrained/mit_b2_imagenet.pth')
 #C.pretrained_model = "../../Results/saved_models/NYUDV2_CMX+Segformer-B2.pth"
 C.decoder = 'MLPDecoder'
 C.decoder_embed_dim = 512
