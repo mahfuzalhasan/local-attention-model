@@ -218,7 +218,7 @@ class RGBXTransformer(nn.Module):
         self.block3 = nn.ModuleList([Block(
             dim=embed_dims[2], num_heads=num_heads[2], mlp_ratio=mlp_ratios[2], qkv_bias=qkv_bias, qk_scale=qk_scale,
             drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
-            sr_ratio=sr_ratios[2], local_region_shape=[4, 8, 8, 16, 16], img_size=(img_size[0]// 16,img_size[1]//16))
+            sr_ratio=sr_ratios[2], local_region_shape=[1, 2, 2, 4, 4], img_size=(img_size[0]// 16,img_size[1]//16))
             for i in range(depths[2])])
         self.norm3 = norm_layer(embed_dims[2])
 
@@ -227,7 +227,7 @@ class RGBXTransformer(nn.Module):
         self.block4 = nn.ModuleList([Block(
             dim=embed_dims[3], num_heads=num_heads[3], mlp_ratio=mlp_ratios[3], qkv_bias=qkv_bias, qk_scale=qk_scale,
             drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
-            sr_ratio=sr_ratios[3], local_region_shape=[4, 4, 4, 8, 8, 8, 16, 16], img_size=(img_size[0]// 32,img_size[1]//32))
+            sr_ratio=sr_ratios[3], local_region_shape=[1, 1, 1, 1, 2, 2, 2, 2], img_size=(img_size[0]// 32,img_size[1]//32))
             for i in range(depths[3])])             
         self.norm4 = norm_layer(embed_dims[3])
 
@@ -363,7 +363,7 @@ def load_dualpath_model(model, model_file):
 class mit_b0(RGBXTransformer):
     def __init__(self, fuse_cfg=None, **kwargs):
         super(mit_b0, self).__init__(
-            img_size=(1024, 1024), patch_size=4, embed_dims=[32, 64, 160, 256], num_heads=[2, 2, 5, 8], mlp_ratios=[4, 4, 4, 4],
+            img_size=(1024, 1024), patch_size=4, embed_dims=[32, 64, 160, 256], num_heads=[2, 4, 5, 8], mlp_ratios=[4, 4, 4, 4],
             qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[2, 2, 2, 2], sr_ratios=[8, 4, 2, 1],
             drop_rate=0.0, drop_path_rate=0.1)
 
