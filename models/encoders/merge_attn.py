@@ -38,6 +38,8 @@ class MultiScaleAttention(nn.Module):
         head_dim = dim // num_heads
         self.scale = qk_scale or head_dim ** -0.5
         self.local_region_shape = local_region_shape
+        print(f'local region shape:{self.local_region_shape}')
+        print(f'num heads:{self.num_heads}')
         assert len(local_region_shape)==self.num_heads
         # Linear embedding
         self.q = nn.Linear(dim, dim, bias=qkv_bias)
