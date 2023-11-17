@@ -13,7 +13,7 @@ sys.path.append(parent_dir)
 model_dir = os.path.abspath(os.path.join(parent_dir, os.pardir))
 sys.path.append(model_dir)
 
-from merge_global_attn import MultiScaleAttention
+from global_query_attn import MultiScaleAttention
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 from net_utils import FeatureFusionModule as FFM
 from net_utils import FeatureRectifyModule as FRM
