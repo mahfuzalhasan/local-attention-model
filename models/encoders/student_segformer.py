@@ -13,8 +13,8 @@ sys.path.append(parent_dir)
 model_dir = os.path.abspath(os.path.join(parent_dir, os.pardir))
 sys.path.append(model_dir)
 
-# from merge_attn import MultiScaleAttention
-from merge_global_attn import MultiScaleAttention
+from merge_attn import MultiScaleAttention
+# from merge_global_attn import MultiScaleAttention
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 from net_utils import FeatureFusionModule as FFM
 from net_utils import FeatureRectifyModule as FRM
@@ -218,7 +218,7 @@ class RGBXTransformer(nn.Module):
         self.block3 = nn.ModuleList([Block(
             dim=embed_dims[2], num_heads=num_heads[2], mlp_ratio=mlp_ratios[2], qkv_bias=qkv_bias, qk_scale=qk_scale,
             drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
-            sr_ratio=sr_ratios[2], local_region_shape=[4, 8, 8, 16, 16], img_size=(img_size[0]// 16,img_size[1]//16))
+            sr_ratio=sr_ratios[2], local_region_shape=[1, 2, 2, 4, 4], img_size=(img_size[0]// 16,img_size[1]//16))
             for i in range(depths[2])])
         self.norm3 = norm_layer(embed_dims[2])
 
@@ -227,7 +227,7 @@ class RGBXTransformer(nn.Module):
         self.block4 = nn.ModuleList([Block(
             dim=embed_dims[3], num_heads=num_heads[3], mlp_ratio=mlp_ratios[3], qkv_bias=qkv_bias, qk_scale=qk_scale,
             drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
-            sr_ratio=sr_ratios[3], local_region_shape=[4, 4, 4, 8, 8, 8, 16, 16], img_size=(img_size[0]// 32,img_size[1]//32))
+            sr_ratio=sr_ratios[3], local_region_shape=[1, 1, 1, 1, 2, 2, 2, 2], img_size=(img_size[0]// 32,img_size[1]//32))
             for i in range(depths[3])])             
         self.norm4 = norm_layer(embed_dims[3])
 
