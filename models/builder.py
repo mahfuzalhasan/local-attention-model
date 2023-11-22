@@ -46,12 +46,12 @@ class EncoderDecoder(nn.Module):
         
         elif cfg.backbone == 'mit_b1':
             logger.info('Using backbone: Segformer-B1')
-            from .encoders.dual_segformer import mit_b0 as backbone
+            from .encoders.student_segformer import mit_b1 as backbone
             self.backbone = backbone(norm_fuse=norm_layer)
         elif cfg.backbone == 'mit_b0':
             logger.info('Using backbone: Segformer-B0')
             self.channels = [32, 64, 160, 256]
-            from .encoders.dual_segformer import mit_b0 as backbone
+            from .encoders.student_segformer import mit_b0 as backbone
             self.backbone = backbone(norm_fuse=norm_layer)
         else:
             logger.info('Using backbone: Segformer-B2')

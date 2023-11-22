@@ -1,0 +1,30 @@
+input to multiScaleAttention:torch.Size([4, 1024, 32])
+ k:torch.Size([4, 4, 1024, 8]) v:torch.Size([4, 4, 1024, 8]) q:torch.Size([4, 4, 1024, 8])
+############################################
+ head-wise k:torch.Size([4, 1, 1024, 8]) v:torch.Size([4, 1, 1024, 8]) q:torch.Size([4, 1, 1024, 8])
+###############
+pos bias shape:  torch.Size([1, 1, 64, 64])
+attn shape:  torch.Size([1, 64, 64, 64])
+################
+final attn:  torch.Size([4, 1, 1024, 8])
+ head-wise k:torch.Size([4, 1, 1024, 8]) v:torch.Size([4, 1, 1024, 8]) q:torch.Size([4, 1, 1024, 8])
+###############
+pos bias shape:  torch.Size([1, 1, 64, 64])
+attn shape:  torch.Size([1, 64, 64, 64])
+################
+final attn:  torch.Size([4, 1, 1024, 8])
+ head-wise k:torch.Size([4, 1, 1024, 8]) v:torch.Size([4, 1, 1024, 8]) q:torch.Size([4, 1, 1024, 8])
+###############
+pos bias shape:  torch.Size([1, 1, 16, 16])
+attn shape:  torch.Size([1, 256, 16, 16])
+################
+final attn:  torch.Size([4, 1, 1024, 8])
+ head-wise k:torch.Size([4, 1, 1024, 8]) v:torch.Size([4, 1, 1024, 8]) q:torch.Size([4, 1, 1024, 8])
+###############
+pos bias shape:  torch.Size([1, 1, 16, 16])
+attn shape:  torch.Size([1, 256, 16, 16])
+################
+final attn:  torch.Size([4, 1, 1024, 8])
+attn_fused: torch.Size([4, 4, 1024, 8])
+fina attn_fused: torch.Size([4, 1024, 32])
+output:  torch.Size([4, 1024, 32])

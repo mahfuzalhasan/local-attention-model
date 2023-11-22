@@ -6,6 +6,7 @@ from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 from einops import rearrange, repeat
 import math
 import time
+torch.autograd.set_detect_anomaly(True)
 
 def get_relative_position_index(win_h: int, win_w: int) -> torch.Tensor:
     """Function to generate pair-wise relative position index for each token inside the window.
@@ -137,7 +138,7 @@ class MultiScaleAttention(nn.Module):
             a_1 = a_1.unsqueeze(dim=1)     # per head --> 1 dimension
            
             # B, N_patch, Np, Ch --> B, Np, N_patch, Ch --> B, Np, C 
-            gl_sub = patched_attn.squeeze(dim=1).transpose(1,2).mean(dim=2).view(B, rg_shp, rg_shp, Ch).permute(0, 3, 1, 2)
+            gl_sub = patched_attn.clone().squeeze(dim=1).transpose(1,2).mean(dim=2).view(B, rg_shp, rg_shp, Ch).permute(0, 3, 1, 2)
             # print(gl_sub.shape)
             if len(global_attn)>0:
                 gl_sub_previous = global_attn[-1]
