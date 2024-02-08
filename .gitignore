@@ -1,14 +1,16 @@
 __pycache__/*
 */__pycache__/*
-#*.pyc
-
+*.pyc
+core.*
 .vscode/*
 Results/*
 data/*
+pretrained/*
 
 
 =======
 
 # mzaman
 Config/*
-
+slurm*
+*.slurm
